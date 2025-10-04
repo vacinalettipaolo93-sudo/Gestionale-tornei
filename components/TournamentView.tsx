@@ -10,6 +10,8 @@ import TimeSlots from './TimeSlots';
 import Playoffs from './Playoffs';
 import ConsolationBracket from './ConsolationBracket';
 import { PlusIcon } from './Icons';
+import { db } from "../firebase";
+import { updateDoc, doc } from "firebase/firestore";
 
 interface TournamentViewProps {
   event: Event;
@@ -57,17 +59,25 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
 
   const selectedGroup = tournament.groups.find(g => g.id === selectedGroupId);
 
-  const handleUpdateEvents = (updater: (prevEvents: Event[]) => Event[]) => {
+  // FUNZIONE WRAPPER: aggiorna sia lo stato React che Firestore
+  const handleUpdateEvents = async (updater: (prevEvents: Event[]) => Event[]) => {
     setEvents(updater);
+    // Prendi il nuovo evento aggiornato
+    const updatedEvents = updater([event]);
+    const updatedEvent = updatedEvents.find(e => e.id === event.id);
+    if (updatedEvent) {
+      await updateDoc(doc(db, "events", event.id), updatedEvent);
+    }
   };
 
-  const handleBookMatch = (timeSlot: TimeSlot) => {
+  // BOOKING PARTITA: aggiorna anche Firestore
+  const handleBookMatch = async (timeSlot: TimeSlot) => {
     if (!bookingMatch) return;
 
     const matchToBookId = bookingMatch.id;
     const timeSlotId = timeSlot.id;
 
-    handleUpdateEvents(prevEvents => prevEvents.map(e => {
+    await handleUpdateEvents(prevEvents => prevEvents.map(e => {
         if (e.id !== event.id) return e;
         return {
             ...e,
@@ -91,8 +101,9 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
     setBookingMatch(null);
   }
 
-  const handleUpdateMatchResult = (matchId: string, score1: number, score2: number) => {
-    handleUpdateEvents(prevEvents => prevEvents.map(e => {
+  // MODIFICA RISULTATO PARTITA: aggiorna anche Firestore
+  const handleUpdateMatchResult = async (matchId: string, score1: number, score2: number) => {
+    await handleUpdateEvents(prevEvents => prevEvents.map(e => {
       if (e.id !== event.id) return e;
       return { ...e, tournaments: e.tournaments.map(t => {
           if (t.id !== tournament.id) return t;
@@ -110,18 +121,19 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
     setScore2(match.score2?.toString() ?? '');
   };
 
-  const handleSaveResult = () => {
+  const handleSaveResult = async () => {
     if (editingMatch) {
       const s1 = parseInt(score1, 10);
       const s2 = parseInt(score2, 10);
       if (!isNaN(s1) && !isNaN(s2)) {
-        handleUpdateMatchResult(editingMatch.id, s1, s2);
+        await handleUpdateMatchResult(editingMatch.id, s1, s2);
         setEditingMatch(null);
       }
     }
   };
 
-  const handleAddGroup = (e: React.FormEvent) => {
+  // AGGIUNTA GIRONE: aggiorna anche Firestore
+  const handleAddGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) return;
 
@@ -132,7 +144,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
         matches: [],
     };
 
-    handleUpdateEvents(prevEvents => prevEvents.map(e => 
+    await handleUpdateEvents(prevEvents => prevEvents.map(e => 
         e.id === event.id ? { ...e, tournaments: e.tournaments.map(t => 
                 t.id === tournament.id ? { ...t, groups: [...t.groups, newGroup] } : t
             )} : e

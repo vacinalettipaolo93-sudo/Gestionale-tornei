@@ -1,270 +1,277 @@
-import React, { useState, useEffect } from 'react';
-import { type Event, type Tournament, type TournamentSettings, type PointRule, type TieBreaker, PlayoffSetting, ConsolationSetting } from '../types';
-import { TrashIcon, PlusIcon, ArrowUpIcon, ArrowDownIcon } from './Icons';
+import React, { useState, useMemo, useEffect } from 'react';
+import { type Event, type Tournament, type Player, type Match, type Group, type TimeSlot } from '../types';
+import StandingsTable from './StandingsTable';
+import MatchList from './MatchList';
+import PlayerManagement from './PlayerManagement';
+import ChatPanel from './ChatPanel';
+import GroupManagement from './GroupManagement';
+import TournamentSettings from './TournamentSettings';
+import TimeSlots from './TimeSlots';
+import Playoffs from './Playoffs';
+import ConsolationBracket from './ConsolationBracket';
+import { PlusIcon } from './Icons';
+import { db } from "../firebase";
+import { updateDoc, doc } from "firebase/firestore";
 
-interface TournamentSettingsProps {
-    event: Event;
-    tournament: Tournament;
-    setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
+interface TournamentViewProps {
+  event: Event;
+  tournament: Tournament;
+  setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
+  isOrganizer: boolean;
+  loggedInPlayerId?: string;
+  onPlayerContact: (player: Player) => void;
 }
 
-const tieBreakerLabels: Record<TieBreaker, string> = {
-    goalDifference: 'Differenza Game',
-    goalsFor: 'Game Fatti',
-    wins: 'Numero Vittorie',
-    headToHead: 'Scontro Diretto',
-};
+type Tab = 'standings' | 'matches' | 'players' | 'groupManagement' | 'settings' | 'timeSlots' | 'playoffs' | 'consolation' | 'chat';
 
-const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tournament, setEvents }) => {
-    const [settings, setSettings] = useState<TournamentSettings>(tournament.settings);
-    const [saved, setSaved] = useState(false);
+const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setEvents, isOrganizer, loggedInPlayerId, onPlayerContact }) => {
+  const [activeTab, setActiveTab] = useState<Tab>('standings');
+  
+  const playerGroup = useMemo(() => {
+    if (loggedInPlayerId) {
+        return tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId));
+    }
+    return tournament.groups[0];
+  }, [tournament, loggedInPlayerId]);
+  
+  const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>(playerGroup?.id);
+  
+  useEffect(() => {
+    if (!isOrganizer && loggedInPlayerId) {
+        const theirGroup = tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId));
+        if(theirGroup) {
+            setSelectedGroupId(theirGroup.id);
+            setActiveTab('standings');
+        }
+    } else if (tournament.groups.length > 0 && !selectedGroupId) {
+        setSelectedGroupId(tournament.groups[0].id);
+    }
+  }, [loggedInPlayerId, isOrganizer, tournament.groups, selectedGroupId]);
 
-    useEffect(() => {
-        setSettings(tournament.settings);
-    }, [tournament]);
-    
-    const handleRuleChange = (ruleId: string, field: keyof PointRule, value: string) => {
-        const numericValue = parseInt(value, 10) || 0;
-        setSettings(prev => ({
-            ...prev,
-            pointRules: prev.pointRules.map(rule => 
-                rule.id === ruleId ? { ...rule, [field]: numericValue } : rule
-            )
-        }));
-    };
 
-    const handleAddRule = () => {
-        const newRule: PointRule = {
-            id: `pr_${Date.now()}`,
-            minDiff: 1,
-            maxDiff: 1,
-            winnerPoints: 3,
-            loserPoints: 0,
+  const [editingMatch, setEditingMatch] = useState<Match | null>(null);
+  const [bookingMatch, setBookingMatch] = useState<Match | null>(null);
+  const [score1, setScore1] = useState('');
+  const [score2, setScore2] = useState('');
+  
+  const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+
+  const selectedGroup = tournament.groups.find(g => g.id === selectedGroupId);
+
+  // FUNZIONE WRAPPER: aggiorna sia lo stato React che Firestore
+  const handleUpdateEvents = async (updater: (prevEvents: Event[]) => Event[]) => {
+    setEvents(updater);
+    // Prendi il nuovo evento aggiornato
+    const updatedEvents = updater([event]);
+    const updatedEvent = updatedEvents.find(e => e.id === event.id);
+    if (updatedEvent) {
+      await updateDoc(doc(db, "events", event.id), updatedEvent);
+    }
+  };
+
+  // BOOKING PARTITA: aggiorna anche Firestore
+  const handleBookMatch = async (timeSlot: TimeSlot) => {
+    if (!bookingMatch) return;
+
+    const matchToBookId = bookingMatch.id;
+    const timeSlotId = timeSlot.id;
+
+    await handleUpdateEvents(prevEvents => prevEvents.map(e => {
+        if (e.id !== event.id) return e;
+        return {
+            ...e,
+            tournaments: e.tournaments.map(t => {
+                if (t.id !== tournament.id) return t;
+                return {
+                    ...t,
+                    timeSlots: t.timeSlots.map(ts => 
+                        ts.id === timeSlotId ? { ...ts, matchId: matchToBookId } : ts
+                    ),
+                    groups: t.groups.map(g => ({
+                        ...g,
+                        matches: g.matches.map(m =>
+                            m.id === matchToBookId ? { ...m, status: 'scheduled', scheduledTime: timeSlot.time, location: timeSlot.location } : m
+                        )
+                    }))
+                };
+            })
         };
-        setSettings(prev => ({
-            ...prev,
-            pointRules: [...prev.pointRules, newRule]
-        }));
+    }));
+    setBookingMatch(null);
+  }
+
+  // MODIFICA RISULTATO PARTITA: aggiorna anche Firestore
+  const handleUpdateMatchResult = async (matchId: string, score1: number, score2: number) => {
+    await handleUpdateEvents(prevEvents => prevEvents.map(e => {
+      if (e.id !== event.id) return e;
+      return { ...e, tournaments: e.tournaments.map(t => {
+          if (t.id !== tournament.id) return t;
+          return { ...t, groups: t.groups.map(g => ({
+              ...g, matches: g.matches.map(m => 
+                m.id === matchId ? { ...m, score1, score2, status: 'completed' } : m
+              )}))};
+        })};
+    }));
+  };
+
+  const handleEditResult = (match: Match) => {
+    setEditingMatch(match);
+    setScore1(match.score1?.toString() ?? '');
+    setScore2(match.score2?.toString() ?? '');
+  };
+
+  const handleSaveResult = async () => {
+    if (editingMatch) {
+      const s1 = parseInt(score1, 10);
+      const s2 = parseInt(score2, 10);
+      if (!isNaN(s1) && !isNaN(s2)) {
+        await handleUpdateMatchResult(editingMatch.id, s1, s2);
+        setEditingMatch(null);
+      }
+    }
+  };
+
+  // AGGIUNTA GIRONE: aggiorna anche Firestore
+  const handleAddGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newGroupName.trim()) return;
+
+    const newGroup: Group = {
+        id: `g${Date.now()}`,
+        name: newGroupName.trim(),
+        playerIds: [],
+        matches: [],
     };
 
-    const handleRemoveRule = (ruleId: string) => {
-        setSettings(prev => ({
-            ...prev,
-            pointRules: prev.pointRules.filter(rule => rule.id !== ruleId)
-        }));
-    };
-    
-    const handleMoveTieBreaker = (index: number, direction: 'up' | 'down') => {
-        const newTieBreakers = [...settings.tieBreakers];
-        const item = newTieBreakers[index];
-        const swapIndex = direction === 'up' ? index - 1 : index + 1;
-        
-        if (swapIndex < 0 || swapIndex >= newTieBreakers.length) return;
+    await handleUpdateEvents(prevEvents => prevEvents.map(e => 
+        e.id === event.id ? { ...e, tournaments: e.tournaments.map(t => 
+                t.id === tournament.id ? { ...t, groups: [...t.groups, newGroup] } : t
+            )} : e
+    ));
 
-        newTieBreakers[index] = newTieBreakers[swapIndex];
-        newTieBreakers[swapIndex] = item;
-        setSettings(prev => ({...prev, tieBreakers: newTieBreakers}));
-    };
+    setNewGroupName('');
+    setIsAddGroupModalOpen(false);
+    if (!selectedGroupId) setSelectedGroupId(newGroup.id);
+  }
 
-    const handlePlayoffSettingChange = (groupId: string, value: string) => {
-        const num = parseInt(value, 10) || 0;
-        const groupPlayerCount = tournament.groups.find(g => g.id === groupId)?.playerIds.length ?? 0;
-        if (num > groupPlayerCount) return;
+  const availableTimeSlots = tournament.timeSlots.filter(ts => ts.matchId === null);
+  
+  const TABS: {id: Tab; name: string; isVisible: () => boolean;}[] = [
+      {id: 'standings', name: 'classifica', isVisible: () => true}, 
+      {id: 'matches', name: 'partite', isVisible: () => true},
+      {id: 'players', name: 'giocatori', isVisible: () => true}, 
+      {id: 'timeSlots', name: 'Slot Orari', isVisible: () => true},
+      {id: 'playoffs', name: 'Playoff', isVisible: () => isOrganizer || (tournament.playoffs?.isGenerated ?? false)},
+      {id: 'consolation', name: 'Consolazione', isVisible: () => isOrganizer || (tournament.consolationBracket?.isGenerated ?? false)},
+      {id: 'groupManagement', name: 'Gestione Gironi', isVisible: () => isOrganizer},
+      {id: 'settings', name: 'Impostazioni', isVisible: () => isOrganizer},
+      {id: 'chat', name: 'chat', isVisible: () => true},
+  ];
 
-        setSettings(prev => {
-            const existing = prev.playoffSettings.find(s => s.groupId === groupId);
-            let newPlayoffSettings: PlayoffSetting[];
-            if (existing) {
-                newPlayoffSettings = prev.playoffSettings.map(s => s.groupId === groupId ? { ...s, numQualifiers: num } : s);
-            } else {
-                 newPlayoffSettings = [...prev.playoffSettings, { groupId, numQualifiers: num }];
-            }
-            return {...prev, playoffSettings: newPlayoffSettings};
-        });
-    };
+  return (
+    <div className="space-y-6">
+      <div className="bg-secondary p-4 rounded-xl shadow-lg flex flex-col md:flex-row justify-between md:items-center gap-4">
+        <h2 className="text-2xl font-bold text-white">{tournament.name}</h2>
+        <div className="flex items-center gap-2">
+            <span className="text-sm text-text-secondary">Girone:</span>
+            {tournament.groups.length > 0 ? (
+                <select 
+                value={selectedGroupId} 
+                onChange={(e) => setSelectedGroupId(e.target.value)}
+                className="bg-primary border border-tertiary rounded-lg p-2 text-text-primary focus:ring-2 focus:ring-accent focus:border-accent"
+                >
+                {tournament.groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+            ) : ( <span className="text-text-secondary italic">Nessun girone</span> )}
+            {isOrganizer && (
+              <button onClick={() => setIsAddGroupModalOpen(true)} className="ml-2 bg-highlight/80 hover:bg-highlight p-2 rounded-full text-white transition-colors">
+                  <PlusIcon className="w-5 h-5"/>
+              </button>
+            )}
+        </div>
+      </div>
 
-    const handleConsolationSettingChange = (groupId: string, field: 'startRank' | 'endRank', value: string) => {
-        const num = parseInt(value, 10) || 0;
-        
-        setSettings(prev => {
-            const existing = prev.consolationSettings.find(s => s.groupId === groupId);
-            let newConsolationSettings: ConsolationSetting[];
-            if (existing) {
-                newConsolationSettings = prev.consolationSettings.map(s => 
-                    s.groupId === groupId ? { ...s, [field]: num } : s
-                );
-            } else {
-                newConsolationSettings = [...prev.consolationSettings, { groupId, startRank: 0, endRank: 0, [field]: num }];
-            }
-            newConsolationSettings = newConsolationSettings.filter(s => s.startRank !== 0 || s.endRank !== 0);
+      <div className="flex border-b border-tertiary/50 flex-wrap">
+        {TABS.map(({id, name, isVisible}) => {
+          if (!isVisible()) return null;
+          return (
+            <button key={id} onClick={() => setActiveTab(id)} className={`px-4 py-2 font-semibold transition-colors capitalize border-b-2 ${activeTab === id ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>
+              {name}
+            </button>
+          )
+        })}
+      </div>
 
-            return {...prev, consolationSettings: newConsolationSettings};
-        });
-    };
+      <div className="animate-fadeIn">
+        {activeTab === 'standings' && (selectedGroup ? <StandingsTable group={selectedGroup} players={event.players} settings={tournament.settings} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact}/> : <p className="text-center text-text-secondary">Nessun girone a cui partecipare.</p>)}
+        {activeTab === 'matches' && (selectedGroup ? <MatchList group={selectedGroup} players={event.players} onEditResult={handleEditResult} onBookMatch={setBookingMatch} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact}/> : <p className="text-center text-text-secondary">Nessun girone a cui partecipare.</p>)}
+        {activeTab === 'players' && <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={onPlayerContact}/>}
+        {activeTab === 'timeSlots' && <TimeSlots event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} />}
+        {activeTab === 'chat' && <ChatPanel />}
+        {activeTab === 'groupManagement' && isOrganizer && <GroupManagement event={event} tournament={tournament} setEvents={setEvents} />}
+        {activeTab === 'settings' && isOrganizer && <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />}
+        {activeTab === 'playoffs' && <Playoffs event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId}/>}
+        {activeTab === 'consolation' && <ConsolationBracket event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} />}
+      </div>
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        setEvents(prevEvents => prevEvents.map(ev => 
-            ev.id === event.id ? {
-                ...ev,
-                tournaments: ev.tournaments.map(t => 
-                    t.id === tournament.id ? { ...t, settings } : t
-                )
-            } : ev
-        ));
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
-    };
+      {editingMatch && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-sm border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Inserisci/Modifica Risultato</h4>
+            <div className="flex items-center justify-between gap-4">
+              <span className="font-semibold">{event.players.find(p => p.id === editingMatch.player1Id)?.name}</span>
+              <div className="flex gap-2">
+                <input type="number" value={score1} onChange={e => setScore1(e.target.value)} className="w-16 text-center bg-primary p-2 rounded-lg" />
+                <span>-</span>
+                <input type="number" value={score2} onChange={e => setScore2(e.target.value)} className="w-16 text-center bg-primary p-2 rounded-lg" />
+              </div>
+              <span className="font-semibold">{event.players.find(p => p.id === editingMatch.player2Id)?.name}</span>
+            </div>
+            <div className="flex justify-end gap-4 mt-6">
+              <button onClick={() => setEditingMatch(null)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annulla</button>
+              <button onClick={handleSaveResult} className="bg-highlight hover:bg-highlight/80 text-white font-bold py-2 px-4 rounded-lg transition-colors">Salva</button>
+            </div>
+          </div>
+        </div>
+      )}
 
-    const inputClasses = "w-16 text-center bg-primary p-2 rounded-lg border border-tertiary focus:ring-2 focus:ring-accent";
-
-    return (
-        <div className="bg-secondary p-6 rounded-xl shadow-lg max-w-3xl mx-auto">
-            <h3 className="text-xl font-bold mb-6 text-accent">Impostazioni Torneo</h3>
-            <form onSubmit={handleSubmit} className="space-y-8">
-                {/* Point Rules Section */}
-                <div>
-                    <h4 className="text-lg font-semibold mb-3 text-text-primary">Regole Punteggio per Vittoria</h4>
-                    <div className="space-y-3 bg-primary/50 p-4 rounded-lg">
-                        {settings.pointRules.map(rule => (
-                            <div key={rule.id} className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-center">
-                                <div className="col-span-1 sm:col-span-2 flex items-center gap-2">
-                                    <span className="text-sm">Se diff. game è tra</span>
-                                    <input type="number" value={rule.minDiff} onChange={e => handleRuleChange(rule.id, 'minDiff', e.target.value)} className={inputClasses}/>
-                                    <span>e</span>
-                                    <input type="number" value={rule.maxDiff} onChange={e => handleRuleChange(rule.id, 'maxDiff', e.target.value)} className={inputClasses}/>
-                                </div>
-                                 <div className="col-span-1 sm:col-span-2 flex items-center gap-2">
-                                    <span className="text-sm">Punti:</span>
-                                    <input type="number" value={rule.winnerPoints} onChange={e => handleRuleChange(rule.id, 'winnerPoints', e.target.value)} className={inputClasses} title="Punti Vincitore"/>
-                                    <span>(V)</span>
-                                     <input type="number" value={rule.loserPoints} onChange={e => handleRuleChange(rule.id, 'loserPoints', e.target.value)} className={inputClasses} title="Punti Sconfitto"/>
-                                    <span>(S)</span>
-                                </div>
-                                <div className="col-span-1 flex justify-end">
-                                    <button type="button" onClick={() => handleRemoveRule(rule.id)} className="text-text-secondary/50 hover:text-red-500 transition-colors p-2"><TrashIcon className="w-5 h-5"/></button>
-                                </div>
-                            </div>
-                        ))}
-                         <button type="button" onClick={handleAddRule} className="flex items-center gap-2 text-sm text-accent hover:text-accent-hover font-semibold mt-2">
-                            <PlusIcon className="w-5 h-5" />
-                            Aggiungi Regola
-                        </button>
-                    </div>
-                </div>
-
-                {/* Draw Points */}
-                <div>
-                    <label htmlFor="pointsPerDraw" className="block mb-1 text-lg font-semibold text-text-primary">Punti per Pareggio</label>
-                    <input
-                        type="number"
-                        id="pointsPerDraw"
-                        name="pointsPerDraw"
-                        value={settings.pointsPerDraw}
-                        onChange={e => setSettings({...settings, pointsPerDraw: parseInt(e.target.value, 10) || 0})}
-                        className="w-40 bg-primary border border-tertiary rounded-lg p-2 text-text-primary focus:ring-2 focus:ring-accent"
-                    />
-                </div>
-
-                {/* Tie Breakers */}
-                <div>
-                     <h4 className="text-lg font-semibold mb-3 text-text-primary">Criteri Ordine Classifica (in caso di parità)</h4>
-                     <div className="space-y-2 bg-primary/50 p-4 rounded-lg max-w-sm">
-                        {settings.tieBreakers.map((tb, index) => (
-                            <div key={tb} className="flex items-center justify-between bg-tertiary/50 p-2 rounded-lg">
-                                <span className="font-medium">{index+1}. {tieBreakerLabels[tb]}</span>
-                                <div className="flex items-center">
-                                    <button type="button" onClick={() => handleMoveTieBreaker(index, 'up')} disabled={index === 0} className="p-1 disabled:opacity-30 text-text-secondary hover:text-text-primary"><ArrowUpIcon className="w-5 h-5"/></button>
-                                    <button type="button" onClick={() => handleMoveTieBreaker(index, 'down')} disabled={index === settings.tieBreakers.length - 1} className="p-1 disabled:opacity-30 text-text-secondary hover:text-text-primary"><ArrowDownIcon className="w-5 h-5"/></button>
-                                </div>
-                            </div>
-                        ))}
-                     </div>
-                </div>
-
-                 {/* Playoff Settings */}
-                <div>
-                     <h4 className="text-lg font-semibold mb-3 text-text-primary">Impostazioni Playoff</h4>
-                     <div className="space-y-3 bg-primary/50 p-4 rounded-lg max-w-sm">
-                        <div className="mb-4">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={settings.hasBronzeFinal}
-                                    onChange={e => setSettings({ ...settings, hasBronzeFinal: e.target.checked })}
-                                    className="w-5 h-5 rounded bg-primary border-tertiary text-accent focus:ring-accent ring-offset-secondary"
-                                />
-                                <span>Includi Finale 3°/4° Posto</span>
-                            </label>
-                        </div>
-                        <p className="text-sm text-text-secondary pt-2 border-t border-tertiary/50">Specifica quanti giocatori si qualificano da ogni girone.</p>
-                        {tournament.groups.map(group => (
-                            <div key={group.id} className="flex items-center justify-between">
-                                <label htmlFor={`qualifiers-${group.id}`} className="font-medium">{group.name}</label>
-                                <select 
-                                    id={`qualifiers-${group.id}`}
-                                    value={settings.playoffSettings.find(s => s.groupId === group.id)?.numQualifiers ?? 0}
-                                    onChange={(e) => handlePlayoffSettingChange(group.id, e.target.value)}
-                                    className="w-24 bg-tertiary border border-tertiary/50 rounded-lg p-2 text-text-primary focus:ring-2 focus:ring-accent"
-                                >
-                                    {[...Array((group.playerIds.length || 0) + 1).keys()].map(i => <option key={i} value={i}>{i}</option>)}
-                                </select>
-                            </div>
-                        ))}
-                         {tournament.groups.length === 0 && <p className="text-text-secondary">Crea prima i gironi.</p>}
-                     </div>
-                </div>
-
-                 {/* Consolation Bracket Settings */}
-                <div>
-                     <h4 className="text-lg font-semibold mb-3 text-text-primary">Impostazioni Tabellone di Consolazione</h4>
-                     <div className="space-y-3 bg-primary/50 p-4 rounded-lg max-w-sm">
-                        <p className="text-sm text-text-secondary">Specifica quali giocatori si qualificano (es. dal 4° al 5° posto).</p>
-                         {tournament.groups.map(group => {
-                            const groupSetting = settings.consolationSettings.find(s => s.groupId === group.id);
-                            const startRank = groupSetting?.startRank ?? 0;
-                            const endRank = groupSetting?.endRank ?? 0;
-                            const ranks = [...Array((group.playerIds.length || 0) + 1).keys()];
-
-                            return (
-                                <div key={group.id} className="flex items-center justify-between gap-2">
-                                    <label htmlFor={`consolation-start-${group.id}`} className="font-medium flex-1">{group.name}</label>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm">Dal</span>
-                                        <select 
-                                            id={`consolation-start-${group.id}`}
-                                            value={startRank}
-                                            onChange={(e) => handleConsolationSettingChange(group.id, 'startRank', e.target.value)}
-                                            className="w-20 bg-tertiary border border-tertiary/50 rounded-lg p-1 text-text-primary text-sm focus:ring-2 focus:ring-accent"
-                                        >
-                                            {ranks.map(i => <option key={i} value={i}>{i === 0 ? 'N/A' : `${i}°`}</option>)}
-                                        </select>
-                                        <span className="text-sm">al</span>
-                                        <select 
-                                            id={`consolation-end-${group.id}`}
-                                            value={endRank}
-                                            onChange={(e) => handleConsolationSettingChange(group.id, 'endRank', e.target.value)}
-                                            className="w-20 bg-tertiary border border-tertiary/50 rounded-lg p-1 text-text-primary text-sm focus:ring-2 focus:ring-accent"
-                                        >
-                                            {ranks.map(i => <option key={i} value={i}>{i === 0 ? 'N/A' : `${i}°`}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                            )
-                        })}
-                         {tournament.groups.length === 0 && <p className="text-text-secondary">Crea prima i gironi.</p>}
-                     </div>
-                </div>
-
-                <div className="flex items-center justify-end pt-4">
-                    {saved && <span className="text-green-400 mr-4 transition-opacity duration-300 animate-fadeIn">Impostazioni salvate!</span>}
-                    <button type="submit" className="bg-highlight hover:bg-highlight/80 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-lg shadow-highlight/20">
-                        Salva Impostazioni
+      {bookingMatch && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Prenota Partita</h4>
+            <p className="mb-4 text-text-secondary">Seleziona uno slot orario disponibile per la partita: <br/><strong className="text-text-primary">{event.players.find(p=>p.id === bookingMatch.player1Id)?.name} vs {event.players.find(p=>p.id === bookingMatch.player2Id)?.name}</strong></p>
+            <div className="max-h-60 overflow-y-auto space-y-2">
+                {availableTimeSlots.length > 0 ? availableTimeSlots.map(ts => (
+                    <button key={ts.id} onClick={() => handleBookMatch(ts)} className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg transition-colors">
+                        <p>{new Date(ts.time).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}</p>
+                        <p className="text-sm text-text-secondary">{ts.location}</p>
                     </button>
+                )) : <p className="text-text-secondary text-center p-4">Nessuno slot orario disponibile. Chiedi all'organizzatore di aggiungerne.</p>}
+            </div>
+            <div className="flex justify-end mt-6">
+              <button onClick={() => setBookingMatch(null)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annulla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAddGroupModalOpen && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-sm border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Aggiungi Nuovo Girone</h4>
+            <form onSubmit={handleAddGroup}>
+                <input type="text" placeholder="Nome del girone" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} className="w-full bg-primary border border-tertiary rounded-lg p-2 text-text-primary focus:ring-2 focus:ring-accent" autoFocus />
+                <div className="flex justify-end gap-4 mt-6">
+                    <button type="button" onClick={() => setIsAddGroupModalOpen(false)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annulla</button>
+                    <button type="submit" className="bg-highlight hover:bg-highlight/80 text-white font-bold py-2 px-4 rounded-lg transition-colors">Crea Girone</button>
                 </div>
             </form>
+          </div>
         </div>
-    );
+      )}
+    </div>
+  );
 };
 
-export default TournamentSettings;
+export default TournamentView;

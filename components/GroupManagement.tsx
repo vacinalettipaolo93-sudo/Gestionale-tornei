@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { type Event, type Tournament, type Group, type Player, type Match } from '../types';
 import { TrashIcon } from './Icons';
+import { db } from "../firebase";
+import { updateDoc, doc } from "firebase/firestore";
 
 interface GroupManagementProps {
     event: Event;
@@ -30,8 +32,13 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
         });
     };
 
-    const handleSaveAssignments = () => {
+    // ASSEGNA GIOCATORI E AGGIORNA FIRESTORE
+    const handleSaveAssignments = async () => {
         if (!assigningGroup) return;
+
+        const updatedGroups = tournament.groups.map(g => 
+            g.id === assigningGroup.id ? { ...g, playerIds: Array.from(selectedPlayers) } : g
+        );
 
         setEvents(prevEvents => prevEvents.map(e => {
             if (e.id !== event.id) return e;
@@ -41,19 +48,34 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                     if (t.id !== tournament.id) return t;
                     return {
                         ...t,
-                        groups: t.groups.map(g => 
-                            g.id === assigningGroup.id ? { ...g, playerIds: Array.from(selectedPlayers) } : g
-                        )
+                        groups: updatedGroups
                     };
                 })
             };
         }));
+
+        await updateDoc(doc(db, "events", event.id), {
+            tournaments: event.tournaments.map(t => 
+                t.id === tournament.id ? { ...t, groups: updatedGroups } : t
+            )
+        });
+
         setAssigningGroup(null);
     };
 
-    const handleRemovePlayer = () => {
+    // RIMUOVI GIOCATORE E AGGIORNA FIRESTORE
+    const handleRemovePlayer = async () => {
         if(!playerToRemove) return;
         const { player, group } = playerToRemove;
+
+        const updatedGroups = tournament.groups.map(g => {
+            if (g.id !== group.id) return g;
+            return {
+                ...g,
+                playerIds: g.playerIds.filter(id => id !== player.id),
+                matches: g.matches.filter(m => m.player1Id !== player.id && m.player2Id !== player.id)
+            }
+        });
 
         setEvents(prevEvents => prevEvents.map(e => {
             if (e.id !== event.id) return e;
@@ -63,22 +85,23 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                     if (t.id !== tournament.id) return t;
                     return {
                         ...t,
-                        groups: t.groups.map(g => {
-                            if (g.id !== group.id) return g;
-                            return {
-                                ...g,
-                                playerIds: g.playerIds.filter(id => id !== player.id),
-                                matches: g.matches.filter(m => m.player1Id !== player.id && m.player2Id !== player.id)
-                            }
-                        })
+                        groups: updatedGroups
                     };
                 })
             };
         }));
+
+        await updateDoc(doc(db, "events", event.id), {
+            tournaments: event.tournaments.map(t => 
+                t.id === tournament.id ? { ...t, groups: updatedGroups } : t
+            )
+        });
+
         setPlayerToRemove(null);
     }
 
-    const handleGenerateMatches = (group: Group) => {
+    // GENERA PARTITE E AGGIORNA FIRESTORE
+    const handleGenerateMatches = async (group: Group) => {
         if (group.playerIds.length < 2) {
             alert("Sono necessari almeno 2 giocatori per generare le partite.");
             return;
@@ -98,6 +121,10 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
             }
         }
 
+        const updatedGroups = tournament.groups.map(g => 
+            g.id === group.id ? { ...g, matches: newMatches } : g
+        );
+
         setEvents(prevEvents => prevEvents.map(e => {
             if (e.id !== event.id) return e;
             return {
@@ -106,13 +133,17 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                     if (t.id !== tournament.id) return t;
                     return {
                         ...t,
-                        groups: t.groups.map(g => 
-                            g.id === group.id ? { ...g, matches: newMatches } : g
-                        )
+                        groups: updatedGroups
                     };
                 })
             };
         }));
+
+        await updateDoc(doc(db, "events", event.id), {
+            tournaments: event.tournaments.map(t => 
+                t.id === tournament.id ? { ...t, groups: updatedGroups } : t
+            )
+        });
     };
 
     const getPlayer = (id: string) => event.players.find(p => p.id === id);

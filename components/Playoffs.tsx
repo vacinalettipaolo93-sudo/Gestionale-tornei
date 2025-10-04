@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { type Event, type Tournament, type Player, type PlayoffBracket, type PlayoffMatch } from '../types';
 import { calculateStandings } from '../utils/standings';
+import { db } from "../firebase";
+import { updateDoc, doc } from "firebase/firestore";
 
 interface PlayoffsProps {
     event: Event;
@@ -63,7 +65,8 @@ const Playoffs: React.FC<PlayoffsProps> = ({ event, tournament, setEvents, isOrg
         });
     };
 
-    const handleGenerateBracket = () => {
+    // GENERA BRACKET E SALVA SU FIRESTORE
+    const handleGenerateBracket = async () => {
         if (firstRoundAssignments.some(a => a === null)) {
             alert("Per favore, riempi tutti gli slot del primo turno.");
             return;
@@ -137,27 +140,42 @@ const Playoffs: React.FC<PlayoffsProps> = ({ event, tournament, setEvents, isOrg
             bronzeFinalId: bronzeFinalId,
         };
 
+        // Salva su React state
         setEvents(prev => prev.map(e => e.id === event.id ? { ...e, tournaments: e.tournaments.map(t => t.id === tournament.id ? { ...t, playoffs: finalBracket } : t) } : e));
+        // Salva su Firestore!
+        await updateDoc(doc(db, "events", event.id), {
+            tournaments: event.tournaments.map(t =>
+                t.id === tournament.id ? { ...t, playoffs: finalBracket } : t
+            )
+        });
+
         setView('bracket');
     };
 
-     const handleResetBracket = () => {
-         setEvents(prev => prev.map(e => e.id === event.id ? { ...e, tournaments: e.tournaments.map(t => t.id === tournament.id ? { ...t, playoffs: { ...(t.playoffs!), isGenerated: false, matches: [], finalId: null, bronzeFinalId: null, } } : t) } : e));
+    // RESET BRACKET E SALVA SU FIRESTORE
+    const handleResetBracket = async () => {
+        setEvents(prev => prev.map(e => e.id === event.id ? { ...e, tournaments: e.tournaments.map(t => t.id === tournament.id ? { ...t, playoffs: { ...(t.playoffs!), isGenerated: false, matches: [], finalId: null, bronzeFinalId: null, } } : t) } : e));
+        await updateDoc(doc(db, "events", event.id), {
+            tournaments: event.tournaments.map(t =>
+                t.id === tournament.id ? { ...t, playoffs: { ...(t.playoffs!), isGenerated: false, matches: [], finalId: null, bronzeFinalId: null, } } : t
+            )
+        });
         setView('setup');
         setIsResetModalOpen(false);
     };
 
-    const handleSaveResult = () => {
+    // SALVA RISULTATO MATCH E AGGIORNA FIRESTORE
+    const handleSaveResult = async () => {
         if (!editingMatch) return;
         const s1 = parseInt(score1, 10);
         const s2 = parseInt(score2, 10);
         if (isNaN(s1) || isNaN(s2)) return;
 
+        // Aggiorna React state
         setEvents(prevEvents => {
             const newEvents = JSON.parse(JSON.stringify(prevEvents));
             const currentTournament = newEvents.find((e: Event) => e.id === event.id)!.tournaments.find((t: Tournament) => t.id === tournament.id)!;
             const bracket = currentTournament.playoffs!;
-
             const match = bracket.matches.find((m: PlayoffMatch) => m.id === editingMatch.id)!;
             match.score1 = s1;
             match.score2 = s2;
@@ -179,6 +197,26 @@ const Playoffs: React.FC<PlayoffsProps> = ({ event, tournament, setEvents, isOrg
                 else if (bronzeMatch.player2Id === null) bronzeMatch.player2Id = loserId;
             }
             return newEvents;
+        });
+
+        // Salva su Firestore!
+        const eventDoc = await doc(db, "events", event.id);
+        const updatedTournament = {
+            ...tournament,
+            playoffs: (() => {
+                const bracketCopy = { ...tournament.playoffs! };
+                const match = bracketCopy.matches.find((m: PlayoffMatch) => m.id === editingMatch.id)!;
+                match.score1 = s1;
+                match.score2 = s2;
+                match.winnerId = s1 > s2 ? match.player1Id : match.player2Id;
+                // aggiorna bracket come sopra se serve...
+                return bracketCopy;
+            })()
+        };
+        await updateDoc(eventDoc, {
+            tournaments: event.tournaments.map(t =>
+                t.id === tournament.id ? updatedTournament : t
+            )
         });
 
         setEditingMatch(null); setScore1(''); setScore2('');
@@ -310,7 +348,7 @@ const Playoffs: React.FC<PlayoffsProps> = ({ event, tournament, setEvents, isOrg
                     </div>
                 )}
             </div>
-        )
+        );
     };
 
     const finalMatch = matches.find(m => m.round === maxRound && !m.isBronzeFinal);

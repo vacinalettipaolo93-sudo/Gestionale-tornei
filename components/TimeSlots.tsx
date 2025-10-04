@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { type Event, type Tournament, type TimeSlot } from '../types';
 import { TrashIcon } from './Icons';
+import { db } from "../firebase";
+import { updateDoc, doc } from "firebase/firestore";
 
 interface TimeSlotsProps {
     event: Event;
@@ -13,7 +15,8 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
     const [newTime, setNewTime] = useState('');
     const [newLocation, setNewLocation] = useState('');
 
-    const handleAddSlot = (e: React.FormEvent) => {
+    // AGGIUNGI SLOT ORARIO e aggiorna Firestore
+    const handleAddSlot = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newTime.trim() || !newLocation.trim()) return;
         
@@ -24,31 +27,59 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
             matchId: null
         };
 
+        const updatedTimeSlots = [...tournament.timeSlots, newSlot].sort((a,b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        // Aggiorna React state
         setEvents(prev => prev.map(ev => ev.id === event.id ? {
             ...ev,
             tournaments: ev.tournaments.map(t => t.id === tournament.id ? {
                 ...t,
-                timeSlots: [...t.timeSlots, newSlot].sort((a,b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+                timeSlots: updatedTimeSlots
             } : t)
         } : ev));
+
+        // Aggiorna Firestore!
+        await updateDoc(doc(db, "events", event.id), {
+            tournaments: event.tournaments.map(t =>
+                t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t
+            )
+        });
 
         setNewTime('');
         setNewLocation('');
     };
 
-    const handleDeleteSlot = (slotId: string) => {
+    // ELIMINA SLOT ORARIO e aggiorna Firestore
+    const handleDeleteSlot = async (slotId: string) => {
+        // Trova lo slot e la sua time
+        const slotToDelete = tournament.timeSlots.find(ts => ts.id === slotId);
+        const updatedTimeSlots = tournament.timeSlots.filter(ts => ts.id !== slotId);
+
+        // Unschedule match se usava questo slot
+        const updatedGroups = tournament.groups.map(g => ({
+            ...g,
+            matches: g.matches.map(m =>
+                slotToDelete && m.scheduledTime === slotToDelete.time
+                    ? { ...m, status: 'pending', scheduledTime: undefined, location: undefined }
+                    : m
+            )
+        }));
+
         setEvents(prev => prev.map(ev => ev.id === event.id ? {
             ...ev,
             tournaments: ev.tournaments.map(t => t.id === tournament.id ? {
                 ...t,
-                timeSlots: t.timeSlots.filter(ts => ts.id !== slotId),
-                // Also unschedule match if it was using this slot
-                groups: t.groups.map(g => ({
-                    ...g,
-                    matches: g.matches.map(m => m.scheduledTime === tournament.timeSlots.find(ts => ts.id === slotId)?.time ? {...m, status: 'pending', scheduledTime: undefined, location: undefined} : m)
-                }))
+                timeSlots: updatedTimeSlots,
+                groups: updatedGroups
             } : t)
         } : ev));
+
+        await updateDoc(doc(db, "events", event.id), {
+            tournaments: event.tournaments.map(t =>
+                t.id === tournament.id
+                    ? { ...t, timeSlots: updatedTimeSlots, groups: updatedGroups }
+                    : t
+            )
+        });
     };
 
     const getMatchPlayers = (matchId: string) => {
@@ -61,7 +92,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
             }
         }
         return 'Partita non trovata';
-    }
+    };
 
     return (
         <div className="space-y-6">

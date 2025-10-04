@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { type Event, type Tournament } from '../types';
 import { TrophyIcon, UsersIcon, PlusIcon, TrashIcon } from './Icons';
+import { db } from "../firebase";
+import { updateDoc, doc } from "firebase/firestore";
 
 interface EventViewProps {
   event: Event;
@@ -14,7 +16,8 @@ const EventView: React.FC<EventViewProps> = ({ event, onSelectTournament, setEve
   const [newTournamentName, setNewTournamentName] = useState('');
   const [tournamentToDelete, setTournamentToDelete] = useState<Tournament | null>(null);
 
-  const handleAddTournament = (e: React.FormEvent) => {
+  // AGGIUNGI TORNEO E AGGIORNA FIRESTORE
+  const handleAddTournament = async (e: React.FormEvent) => {
     e.preventDefault();
     if(!newTournamentName.trim()) return;
 
@@ -37,25 +40,41 @@ const EventView: React.FC<EventViewProps> = ({ event, onSelectTournament, setEve
         consolationBracket: null,
     };
 
+    const updatedTournaments = [...event.tournaments, newTournament];
+
+    // Aggiorna React state
     setEvents(prevEvents => 
         prevEvents.map(e => 
             e.id === event.id 
-                ? { ...e, tournaments: [...e.tournaments, newTournament] } 
+                ? { ...e, tournaments: updatedTournaments } 
                 : e
         )
     );
+
+    // Aggiorna Firestore!
+    await updateDoc(doc(db, "events", event.id), {
+        tournaments: updatedTournaments
+    });
 
     setNewTournamentName('');
     setIsModalOpen(false);
   }
 
-  const handleDeleteTournament = () => {
+  // ELIMINA TORNEO E AGGIORNA FIRESTORE
+  const handleDeleteTournament = async () => {
     if (!tournamentToDelete) return;
+    const updatedTournaments = event.tournaments.filter(t => t.id !== tournamentToDelete.id);
+
     setEvents(prevEvents => prevEvents.map(e => 
         e.id === event.id
-            ? { ...e, tournaments: e.tournaments.filter(t => t.id !== tournamentToDelete.id) }
+            ? { ...e, tournaments: updatedTournaments }
             : e
     ));
+
+    await updateDoc(doc(db, "events", event.id), {
+        tournaments: updatedTournaments
+    });
+
     setTournamentToDelete(null);
   }
 
