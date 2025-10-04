@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { type Event, type Player } from '../types';
+import { addPlayerAndUser } from "../utils/addPlayerAndUser";
 import { db } from "../firebase";
 import { updateDoc, doc } from "firebase/firestore";
-import { addPlayerAndUser } from "../utils/addPlayerAndUser";
 
 const createInitialsAvatar = (name: string): string => {
   const initials = name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
@@ -30,35 +30,36 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
     const confirmedPlayers = players.filter(p => p.status === 'confirmed');
     const pendingPlayers = players.filter(p => p.status === 'pending');
 
-    // AGGIUNGI GIOCATORE E AGGIORNA FIRESTORE
+    // AGGIUNGI GIOCATORE: crea player globale, utente, aggiorna evento
     const handleAddPlayer = async (e: React.FormEvent) => {
         e.preventDefault();
         if(!newPlayerName.trim() || !newPlayerPhone.trim()) return;
         setLoading(true);
 
-        const playerData = {
-          name: newPlayerName.trim(),
-          phone: newPlayerPhone.trim(),
-          avatar: createInitialsAvatar(newPlayerName.trim())
-        };
-
         try {
-          await addPlayerAndUser(playerData);
-          const newPlayer: Player = {
-              id: `p${Date.now()}`,
-              name: playerData.name,
-              phone: playerData.phone,
-              avatar: playerData.avatar,
-              status: 'confirmed',
-          };
-          const updatedPlayers = [...event.players, newPlayer];
-          setEvents(prevEvents => prevEvents.map(e => 
-              e.id === event.id ? {...e, players: updatedPlayers} : e
-          ));
-          // Aggiorna Firestore!
-          await updateDoc(doc(db, "events", event.id), {
-              players: updatedPlayers
+          await addPlayerAndUser(event, {
+            name: newPlayerName.trim(),
+            phone: newPlayerPhone.trim(),
+            avatar: createInitialsAvatar(newPlayerName.trim())
           });
+          // Aggiorna React state locale
+          setEvents(prevEvents => prevEvents.map(e =>
+            e.id === event.id
+              ? {
+                  ...e,
+                  players: [
+                    ...e.players,
+                    {
+                      id: e.players.length > 0 ? e.players[e.players.length - 1].id : `p${Date.now()}`,
+                      name: newPlayerName.trim(),
+                      phone: newPlayerPhone.trim(),
+                      avatar: createInitialsAvatar(newPlayerName.trim()),
+                      status: "confirmed"
+                    }
+                  ]
+                }
+              : e
+          ));
           setNewPlayerName('');
           setNewPlayerPhone('');
         } catch (err) {
@@ -102,7 +103,7 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
             })
         }));
 
-        setEvents(prevEvents => prevEvents.map(e => 
+        setEvents(prevEvents => prevEvents.map(e =>
             e.id === event.id ? {...e, tournaments: newTournaments} : e
         ));
         await updateDoc(doc(db, "events", event.id), {
