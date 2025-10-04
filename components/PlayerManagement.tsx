@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { type Event, type Player } from '../types';
 
-// FIREBASE IMPORTS
 import { db } from "../firebase";
 import { doc, updateDoc } from "firebase/firestore";
+import { addPlayerAndUser } from "../utils/addPlayerAndUser";
 
 const createInitialsAvatar = (name: string): string => {
   const initials = name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
@@ -25,32 +25,44 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
     const [replacementTarget, setReplacementTarget] = useState<string>('');
     const [newPlayerName, setNewPlayerName] = useState('');
     const [newPlayerPhone, setNewPlayerPhone] = useState('');
-    
+    const [loading, setLoading] = useState(false);
+
     const players = event.players;
     const confirmedPlayers = players.filter(p => p.status === 'confirmed');
     const pendingPlayers = players.filter(p => p.status === 'pending');
 
-    // AGGIUNGI GIOCATORE IN FIRESTORE
+    // AGGIUNGI GIOCATORE IN FIRESTORE e CREA UTENTE
     const handleAddPlayer = async (e: React.FormEvent) => {
         e.preventDefault();
         if(!newPlayerName.trim() || !newPlayerPhone.trim()) return;
+        setLoading(true);
 
-        const newPlayer: Player = {
-            id: `p${Date.now()}`,
-            name: newPlayerName.trim(),
-            phone: newPlayerPhone.trim(),
-            avatar: createInitialsAvatar(newPlayerName.trim()),
-            status: 'confirmed',
+        const playerData = {
+          name: newPlayerName.trim(),
+          phone: newPlayerPhone.trim(),
+          avatar: createInitialsAvatar(newPlayerName.trim())
         };
 
-        await updateDoc(doc(db, "events", event.id), {
-            players: [...event.players, newPlayer]
-        });
-
-        setNewPlayerName('');
-        setNewPlayerPhone('');
+        try {
+          await addPlayerAndUser(playerData);
+          const newPlayer: Player = {
+              id: `p${Date.now()}`,
+              name: playerData.name,
+              phone: playerData.phone,
+              avatar: playerData.avatar,
+              status: 'confirmed',
+          };
+          await updateDoc(doc(db, "events", event.id), {
+              players: [...event.players, newPlayer]
+          });
+          setNewPlayerName('');
+          setNewPlayerPhone('');
+        } catch (err) {
+          alert("Errore durante la creazione: " + (err as Error).message);
+        }
+        setLoading(false);
     };
-    
+
     // CONFERMA GIOCATORE IN FIRESTORE
     const handleConfirmPlayer = async (playerId: string) => {
         const updatedPlayers = event.players.map(p => p.id === playerId ? {...p, status: 'confirmed'} : p);
@@ -58,12 +70,11 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
             players: updatedPlayers
         });
     };
-    
+
     // SOSTITUISCI GIOCATORE IN FIRESTORE
     const handleReplacePlayer = async () => {
         if (!replacingPlayer || !replacementTarget) return;
 
-        // aggiorna in tutti i tornei e gruppi
         const newTournaments = event.tournaments.map(tourn => ({
             ...tourn,
             groups: tourn.groups.map(group => {
@@ -114,8 +125,8 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                             className="flex-grow bg-secondary border border-tertiary rounded-lg p-2 text-text-primary focus:ring-2 focus:ring-accent"
                             required
                         />
-                        <button type="submit" className="bg-highlight hover:bg-highlight/90 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">
-                            Aggiungi
+                        <button type="submit" disabled={loading} className="bg-highlight hover:bg-highlight/90 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">
+                            {loading ? "Aggiungo..." : "Aggiungi"}
                         </button>
                     </form>
                 </div>
