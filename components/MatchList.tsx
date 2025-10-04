@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { type Group, type Match, type Player } from '../types';
 import { WhatsAppIcon } from './Icons';
 
+// FIREBASE IMPORTS
+import { db } from "../firebase";
+import { doc, updateDoc } from "firebase/firestore";
+
 interface MatchListProps {
   group: Group;
   players: Player[];

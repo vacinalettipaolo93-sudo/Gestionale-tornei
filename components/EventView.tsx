@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { type Event, type Tournament } from '../types';
 import { TrophyIcon, UsersIcon, PlusIcon, TrashIcon } from './Icons';
 
+// FIREBASE IMPORTS
+import { db } from "../firebase";
+import { doc, updateDoc } from "firebase/firestore";
+
 interface EventViewProps {
   event: Event;
   onSelectTournament: (tournament: Tournament) => void;
@@ -14,7 +18,8 @@ const EventView: React.FC<EventViewProps> = ({ event, onSelectTournament, setEve
   const [newTournamentName, setNewTournamentName] = useState('');
   const [tournamentToDelete, setTournamentToDelete] = useState<Tournament | null>(null);
 
-  const handleAddTournament = (e: React.FormEvent) => {
+  // AGGIUNGI TORNEO IN FIRESTORE
+  const handleAddTournament = async (e: React.FormEvent) => {
     e.preventDefault();
     if(!newTournamentName.trim()) return;
 
@@ -37,25 +42,21 @@ const EventView: React.FC<EventViewProps> = ({ event, onSelectTournament, setEve
         consolationBracket: null,
     };
 
-    setEvents(prevEvents => 
-        prevEvents.map(e => 
-            e.id === event.id 
-                ? { ...e, tournaments: [...e.tournaments, newTournament] } 
-                : e
-        )
-    );
+    // Aggiorna i tornei nell'evento su Firestore
+    await updateDoc(doc(db, "events", event.id), {
+      tournaments: [...event.tournaments, newTournament]
+    });
 
     setNewTournamentName('');
     setIsModalOpen(false);
   }
 
-  const handleDeleteTournament = () => {
+  // ELIMINA TORNEO IN FIRESTORE
+  const handleDeleteTournament = async () => {
     if (!tournamentToDelete) return;
-    setEvents(prevEvents => prevEvents.map(e => 
-        e.id === event.id
-            ? { ...e, tournaments: e.tournaments.filter(t => t.id !== tournamentToDelete.id) }
-            : e
-    ));
+    await updateDoc(doc(db, "events", event.id), {
+      tournaments: event.tournaments.filter(t => t.id !== tournamentToDelete.id)
+    });
     setTournamentToDelete(null);
   }
 

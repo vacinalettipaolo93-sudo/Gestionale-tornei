@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { type User, type Event } from '../types';
 import { FaceSmileIcon, LinkIcon, PhotoIcon } from './Icons';
 
+// FIREBASE IMPORTS
+import { db } from "../firebase";
+import { doc, updateDoc } from "firebase/firestore";
+
 interface EditProfileModalProps {
   user: User;
   users: User[];
@@ -26,7 +30,8 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, users, setUse
   // Avatar state
   const [imageUrl, setImageUrl] = useState('');
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  // AGGIORNA PASSWORD SU FIRESTORE
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError('');
     setPasswordSuccess('');
@@ -45,9 +50,8 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, users, setUse
       return;
     }
 
-    setUsers(prevUsers =>
-      prevUsers.map(u => (u.id === user.id ? { ...u, password: newPassword } : u))
-    );
+    // Aggiorna in Firestore
+    await updateDoc(doc(db, "users", user.id), { password: newPassword });
 
     setPasswordSuccess('Password modificata con successo!');
     setOldPassword('');
@@ -58,15 +62,17 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, users, setUse
     }, 2000);
   };
 
-  const handleAvatarUpdate = (newAvatar: string) => {
+  // AGGIORNA AVATAR SU FIRESTORE
+  const handleAvatarUpdate = async (newAvatar: string) => {
     if (!user.playerId) return;
 
-    setEvents(prevEvents => prevEvents.map(event => ({
-        ...event,
-        players: event.players.map(p =>
-            p.id === user.playerId ? { ...p, avatar: newAvatar } : p
-        )
-    })));
+    // Aggiorna avatar in ogni evento dove il giocatore è presente
+    for (const event of events) {
+      const playersUpdated = event.players.map(p =>
+        p.id === user.playerId ? { ...p, avatar: newAvatar } : p
+      );
+      await updateDoc(doc(db, "events", event.id), { players: playersUpdated });
+    }
   };
 
   const emojiToSvgDataUrl = (emoji: string) => {

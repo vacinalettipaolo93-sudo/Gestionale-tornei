@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { type Event, type Tournament, type TournamentSettings, type PointRule, type TieBreaker, PlayoffSetting, ConsolationSetting } from '../types';
 import { TrashIcon, PlusIcon, ArrowUpIcon, ArrowDownIcon } from './Icons';
 
+// FIREBASE IMPORTS
+import { db } from "../firebase";
+import { doc, updateDoc } from "firebase/firestore";
+
 interface TournamentSettingsProps {
     event: Event;
     tournament: Tournament;
@@ -102,16 +106,13 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
         });
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    // AGGIORNA IMPOSTAZIONI TORNEO SU FIRESTORE
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setEvents(prevEvents => prevEvents.map(ev => 
-            ev.id === event.id ? {
-                ...ev,
-                tournaments: ev.tournaments.map(t => 
-                    t.id === tournament.id ? { ...t, settings } : t
-                )
-            } : ev
-        ));
+        const tournamentsUpdated = event.tournaments.map(t => 
+            t.id === tournament.id ? { ...t, settings } : t
+        );
+        await updateDoc(doc(db, "events", event.id), { tournaments: tournamentsUpdated });
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
     };

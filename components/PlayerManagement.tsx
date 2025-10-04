@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { type Event, type Player } from '../types';
 
+// FIREBASE IMPORTS
+import { db } from "../firebase";
+import { doc, updateDoc } from "firebase/firestore";
+
 const createInitialsAvatar = (name: string): string => {
   const initials = name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
   const colors = ['#8b5cf6', '#22d3ee', '#f59e0b', '#10b981', '#ef4444', '#3b82f6'];
@@ -26,7 +30,8 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
     const confirmedPlayers = players.filter(p => p.status === 'confirmed');
     const pendingPlayers = players.filter(p => p.status === 'pending');
 
-    const handleAddPlayer = (e: React.FormEvent) => {
+    // AGGIUNGI GIOCATORE IN FIRESTORE
+    const handleAddPlayer = async (e: React.FormEvent) => {
         e.preventDefault();
         if(!newPlayerName.trim() || !newPlayerPhone.trim()) return;
 
@@ -38,48 +43,47 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
             status: 'confirmed',
         };
 
-        setEvents(prevEvents => prevEvents.map(e => 
-            e.id === event.id ? {...e, players: [...e.players, newPlayer]} : e
-        ));
+        await updateDoc(doc(db, "events", event.id), {
+            players: [...event.players, newPlayer]
+        });
 
         setNewPlayerName('');
         setNewPlayerPhone('');
     };
     
-    const handleConfirmPlayer = (playerId: string) => {
-        setEvents(prevEvents => prevEvents.map(e => {
-            if (e.id !== event.id) return e;
-            return {
-                ...e,
-                players: e.players.map(p => p.id === playerId ? {...p, status: 'confirmed'} : p)
-            }
-        }));
+    // CONFERMA GIOCATORE IN FIRESTORE
+    const handleConfirmPlayer = async (playerId: string) => {
+        const updatedPlayers = event.players.map(p => p.id === playerId ? {...p, status: 'confirmed'} : p);
+        await updateDoc(doc(db, "events", event.id), {
+            players: updatedPlayers
+        });
     };
     
-    const handleReplacePlayer = () => {
+    // SOSTITUISCI GIOCATORE IN FIRESTORE
+    const handleReplacePlayer = async () => {
         if (!replacingPlayer || !replacementTarget) return;
-        
-        setEvents(prevEvents => prevEvents.map(e => {
-            if (e.id !== event.id) return e;
-            
-            const newTournaments = e.tournaments.map(tourn => ({
-                ...tourn,
-                groups: tourn.groups.map(group => {
-                    if (!group.playerIds.includes(replacingPlayer.id)) return group;
-                    return {
-                        ...group,
-                        playerIds: group.playerIds.map(id => id === replacingPlayer.id ? replacementTarget : id),
-                        matches: group.matches.map(match => {
-                            if(match.player1Id === replacingPlayer.id) return {...match, player1Id: replacementTarget};
-                            if(match.player2Id === replacingPlayer.id) return {...match, player2Id: replacementTarget};
-                            return match;
-                        })
-                    };
-                })
-            }));
-            
-            return {...e, tournaments: newTournaments};
+
+        // aggiorna in tutti i tornei e gruppi
+        const newTournaments = event.tournaments.map(tourn => ({
+            ...tourn,
+            groups: tourn.groups.map(group => {
+                if (!group.playerIds.includes(replacingPlayer.id)) return group;
+                return {
+                    ...group,
+                    playerIds: group.playerIds.map(id => id === replacingPlayer.id ? replacementTarget : id),
+                    matches: group.matches.map(match => {
+                        if(match.player1Id === replacingPlayer.id) return {...match, player1Id: replacementTarget};
+                        if(match.player2Id === replacingPlayer.id) return {...match, player2Id: replacementTarget};
+                        return match;
+                    })
+                };
+            })
         }));
+
+        await updateDoc(doc(db, "events", event.id), {
+            tournaments: newTournaments
+        });
+
         setReplacingPlayer(null);
     };
 

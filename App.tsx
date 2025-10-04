@@ -1,5 +1,4 @@
-import React, { useState, useMemo } from 'react';
-import { MOCK_EVENTS, MOCK_USERS } from './data/mockData';
+import React, { useState, useMemo, useEffect } from 'react';
 import { type Event, type Tournament, type User, type Player } from './types';
 import EventView from './components/EventView';
 import TournamentView from './components/TournamentView';
@@ -9,11 +8,15 @@ import ParticipantDashboard from './components/ParticipantDashboard';
 import ContactModal from './components/ContactModal';
 import { BackArrowIcon, TrophyIcon, PlusIcon, TrashIcon, UserCircleIcon, LogoutIcon } from './components/Icons';
 
+// IMPORT FIREBASE
+import { db } from "./firebase";
+import { collection, onSnapshot, addDoc, deleteDoc, doc } from "firebase/firestore";
+
 type View = 'dashboard' | 'event' | 'tournament';
 
 const App: React.FC = () => {
-  const [events, setEvents] = useState<Event[]>(MOCK_EVENTS);
-  const [users, setUsers] = useState<User[]>(MOCK_USERS);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   const [currentView, setCurrentView] = useState<View>('dashboard');
@@ -28,6 +31,23 @@ const App: React.FC = () => {
 
   const isOrganizer = currentUser?.role === 'organizer';
   const loggedInPlayerId = currentUser?.playerId;
+
+  // FIRESTORE: Leggi eventi e utenti in tempo reale
+  useEffect(() => {
+    // Eventi
+    const unsubEvents = onSnapshot(collection(db, "events"), snapshot => {
+      setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
+    });
+    // Utenti
+    const unsubUsers = onSnapshot(collection(db, "users"), snapshot => {
+      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+    });
+    // Cleanup
+    return () => {
+      unsubEvents();
+      unsubUsers();
+    };
+  }, []);
 
   const handleSelectEvent = (event: Event) => {
     setSelectedEvent(event);
@@ -49,7 +69,8 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCreateEvent = (e: React.FormEvent) => {
+  // CREA EVENTO SU FIRESTORE
+  const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEventName.trim()) return;
 
@@ -60,15 +81,16 @@ const App: React.FC = () => {
       players: [],
       tournaments: [],
     };
-    setEvents(prevEvents => [...prevEvents, newEvent]);
+    await addDoc(collection(db, "events"), newEvent);
     setNewEventName('');
     setIsCreateModalOpen(false);
   };
   
-  const handleDeleteEvent = () => {
-      if(!eventToDelete) return;
-      setEvents(prevEvents => prevEvents.filter(e => e.id !== eventToDelete.id));
-      setEventToDelete(null);
+  // ELIMINA EVENTO DA FIRESTORE
+  const handleDeleteEvent = async () => {
+    if(!eventToDelete) return;
+    await deleteDoc(doc(db, "events", eventToDelete.id));
+    setEventToDelete(null);
   }
 
   const handleLogout = () => {
