@@ -72,9 +72,9 @@ const Login: React.FC<LoginProps> = ({ users, onLoginSuccess }) => {
                 </div>
                 </form>
             </div>
+            {/* SUGGERIMENTO PERSONALIZZATO */}
             <div className="text-center mt-4 text-xs text-text-secondary/50">
-                <p>Organizer: `organizer` / `password`</p>
-                <p>Partecipante: `Nome Cognome` / `1234`</p>
+                <p>Partecipante: <strong>Nome Cognome</strong> / <strong>1234</strong></p>
             </div>
         </div>
     </div>
