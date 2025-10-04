@@ -11,10 +11,6 @@ import Playoffs from './Playoffs';
 import ConsolationBracket from './ConsolationBracket';
 import { PlusIcon } from './Icons';
 
-// FIREBASE IMPORTS
-import { db } from "../firebase";
-import { doc, updateDoc } from "firebase/firestore";
-
 interface TournamentViewProps {
   event: Event;
   tournament: Tournament;
@@ -61,23 +57,51 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
 
   const selectedGroup = tournament.groups.find(g => g.id === selectedGroupId);
 
-  // Update events via Firestore
-  const updateTournamentOnFirestore = async (updatedTournament: Tournament) => {
-    const tournamentsUpdated = event.tournaments.map(t => t.id === tournament.id ? updatedTournament : t);
-    await updateDoc(doc(db, "events", event.id), { tournaments: tournamentsUpdated });
+  const handleUpdateEvents = (updater: (prevEvents: Event[]) => Event[]) => {
+    setEvents(updater);
   };
 
-  const handleUpdateMatchResult = async (matchId: string, score1: number, score2: number) => {
-    const updatedTournament = {
-      ...tournament,
-      groups: tournament.groups.map(g => ({
-        ...g,
-        matches: g.matches.map(m =>
-          m.id === matchId ? { ...m, score1, score2, status: 'completed' } : m
-        )
-      }))
-    };
-    await updateTournamentOnFirestore(updatedTournament);
+  const handleBookMatch = (timeSlot: TimeSlot) => {
+    if (!bookingMatch) return;
+
+    const matchToBookId = bookingMatch.id;
+    const timeSlotId = timeSlot.id;
+
+    handleUpdateEvents(prevEvents => prevEvents.map(e => {
+        if (e.id !== event.id) return e;
+        return {
+            ...e,
+            tournaments: e.tournaments.map(t => {
+                if (t.id !== tournament.id) return t;
+                return {
+                    ...t,
+                    timeSlots: t.timeSlots.map(ts => 
+                        ts.id === timeSlotId ? { ...ts, matchId: matchToBookId } : ts
+                    ),
+                    groups: t.groups.map(g => ({
+                        ...g,
+                        matches: g.matches.map(m =>
+                            m.id === matchToBookId ? { ...m, status: 'scheduled', scheduledTime: timeSlot.time, location: timeSlot.location } : m
+                        )
+                    }))
+                };
+            })
+        };
+    }));
+    setBookingMatch(null);
+  }
+
+  const handleUpdateMatchResult = (matchId: string, score1: number, score2: number) => {
+    handleUpdateEvents(prevEvents => prevEvents.map(e => {
+      if (e.id !== event.id) return e;
+      return { ...e, tournaments: e.tournaments.map(t => {
+          if (t.id !== tournament.id) return t;
+          return { ...t, groups: t.groups.map(g => ({
+              ...g, matches: g.matches.map(m => 
+                m.id === matchId ? { ...m, score1, score2, status: 'completed' } : m
+              )}))};
+        })};
+    }));
   };
 
   const handleEditResult = (match: Match) => {
@@ -86,44 +110,18 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
     setScore2(match.score2?.toString() ?? '');
   };
 
-  const handleSaveResult = async () => {
+  const handleSaveResult = () => {
     if (editingMatch) {
       const s1 = parseInt(score1, 10);
       const s2 = parseInt(score2, 10);
       if (!isNaN(s1) && !isNaN(s2)) {
-        await handleUpdateMatchResult(editingMatch.id, s1, s2);
+        handleUpdateMatchResult(editingMatch.id, s1, s2);
         setEditingMatch(null);
       }
     }
   };
 
-  const handleBookMatch = (match: Match) => {
-    setBookingMatch(match);
-  };
-
-  const handleBookMatchSubmit = async (timeSlot: TimeSlot) => {
-    if (!bookingMatch) return;
-
-    const matchToBookId = bookingMatch.id;
-    const timeSlotId = timeSlot.id;
-
-    const updatedTournament = {
-      ...tournament,
-      timeSlots: tournament.timeSlots.map(ts => 
-        ts.id === timeSlotId ? { ...ts, matchId: matchToBookId } : ts
-      ),
-      groups: tournament.groups.map(g => ({
-        ...g,
-        matches: g.matches.map(m =>
-          m.id === matchToBookId ? { ...m, status: 'scheduled', scheduledTime: timeSlot.time, location: timeSlot.location } : m
-        )
-      }))
-    };
-    await updateTournamentOnFirestore(updatedTournament);
-    setBookingMatch(null);
-  };
-
-  const handleAddGroup = async (e: React.FormEvent) => {
+  const handleAddGroup = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) return;
 
@@ -134,11 +132,11 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
         matches: [],
     };
 
-    const updatedTournament = {
-      ...tournament,
-      groups: [...tournament.groups, newGroup]
-    };
-    await updateTournamentOnFirestore(updatedTournament);
+    handleUpdateEvents(prevEvents => prevEvents.map(e => 
+        e.id === event.id ? { ...e, tournaments: e.tournaments.map(t => 
+                t.id === tournament.id ? { ...t, groups: [...t.groups, newGroup] } : t
+            )} : e
+    ));
 
     setNewGroupName('');
     setIsAddGroupModalOpen(false);
@@ -195,7 +193,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
 
       <div className="animate-fadeIn">
         {activeTab === 'standings' && (selectedGroup ? <StandingsTable group={selectedGroup} players={event.players} settings={tournament.settings} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact}/> : <p className="text-center text-text-secondary">Nessun girone a cui partecipare.</p>)}
-        {activeTab === 'matches' && (selectedGroup ? <MatchList group={selectedGroup} players={event.players} onEditResult={handleEditResult} onBookMatch={handleBookMatch} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact}/> : <p className="text-center text-text-secondary">Nessun girone a cui partecipare.</p>)}
+        {activeTab === 'matches' && (selectedGroup ? <MatchList group={selectedGroup} players={event.players} onEditResult={handleEditResult} onBookMatch={setBookingMatch} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact}/> : <p className="text-center text-text-secondary">Nessun girone a cui partecipare.</p>)}
         {activeTab === 'players' && <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={onPlayerContact}/>}
         {activeTab === 'timeSlots' && <TimeSlots event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} />}
         {activeTab === 'chat' && <ChatPanel />}
@@ -233,7 +231,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
             <p className="mb-4 text-text-secondary">Seleziona uno slot orario disponibile per la partita: <br/><strong className="text-text-primary">{event.players.find(p=>p.id === bookingMatch.player1Id)?.name} vs {event.players.find(p=>p.id === bookingMatch.player2Id)?.name}</strong></p>
             <div className="max-h-60 overflow-y-auto space-y-2">
                 {availableTimeSlots.length > 0 ? availableTimeSlots.map(ts => (
-                    <button key={ts.id} onClick={() => handleBookMatchSubmit(ts)} className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg transition-colors">
+                    <button key={ts.id} onClick={() => handleBookMatch(ts)} className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg transition-colors">
                         <p>{new Date(ts.time).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}</p>
                         <p className="text-sm text-text-secondary">{ts.location}</p>
                     </button>

@@ -2,10 +2,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { type Event, type Tournament, type Player, type PlayoffBracket, type PlayoffMatch } from '../types';
 import { calculateStandings } from '../utils/standings';
 
-// FIREBASE IMPORTS
-import { db } from "../firebase";
-import { doc, updateDoc } from "firebase/firestore";
-
 interface ConsolationBracketProps {
     event: Event;
     tournament: Tournament;
@@ -68,16 +64,7 @@ const ConsolationBracket: React.FC<ConsolationBracketProps> = ({ event, tourname
         });
     };
 
-    // AGGIORNAMENTO FIRESTORE DEL TABELLONE
-    const updateConsolationBracketOnFirestore = async (updatedBracket: PlayoffBracket) => {
-        // Aggiorna il torneo nel documento evento su Firestore
-        const tournamentsUpdated = event.tournaments.map(t => 
-            t.id === tournament.id ? { ...t, consolationBracket: updatedBracket } : t
-        );
-        await updateDoc(doc(db, "events", event.id), { tournaments: tournamentsUpdated });
-    };
-
-    const handleGenerateBracket = async () => {
+    const handleGenerateBracket = () => {
         if (firstRoundAssignments.some(a => a === null)) {
             alert("Per favore, riempi tutti gli slot del primo turno.");
             return;
@@ -138,32 +125,26 @@ const ConsolationBracket: React.FC<ConsolationBracketProps> = ({ event, tourname
             bronzeFinalId: null,
         };
 
-        await updateConsolationBracketOnFirestore(finalBracket);
+        setEvents(prev => prev.map(e => e.id === event.id ? { ...e, tournaments: e.tournaments.map(t => t.id === tournament.id ? { ...t, consolationBracket: finalBracket } : t) } : e));
         setView('bracket');
     };
 
-    const handleResetBracket = async () => {
-        const resetBracket: PlayoffBracket = {
-            matches: [],
-            isGenerated: false,
-            finalId: null,
-            bronzeFinalId: null,
-        };
-        await updateConsolationBracketOnFirestore(resetBracket);
+     const handleResetBracket = () => {
+         setEvents(prev => prev.map(e => e.id === event.id ? { ...e, tournaments: e.tournaments.map(t => t.id === tournament.id ? { ...t, consolationBracket: { ...(t.consolationBracket!), isGenerated: false, matches: [], finalId: null, bronzeFinalId: null, } } : t) } : e));
         setView('setup');
         setIsResetModalOpen(false);
     };
 
-    const handleSaveResult = async () => {
+    const handleSaveResult = () => {
         if (!editingMatch) return;
         const s1 = parseInt(score1, 10);
         const s2 = parseInt(score2, 10);
         if (isNaN(s1) || isNaN(s2)) return;
 
-        // Aggiorna il risultato nella bracket su Firestore
-        const tournamentsUpdated = event.tournaments.map(t => {
-            if (t.id !== tournament.id) return t;
-            const bracket = { ...(t.consolationBracket!) };
+        setEvents(prevEvents => {
+            const newEvents = JSON.parse(JSON.stringify(prevEvents));
+            const currentTournament = newEvents.find((e: Event) => e.id === event.id)!.tournaments.find((t: Tournament) => t.id === tournament.id)!;
+            const bracket = currentTournament.consolationBracket!;
             const match = bracket.matches.find((m: PlayoffMatch) => m.id === editingMatch.id)!;
             match.score1 = s1;
             match.score2 = s2;
@@ -177,10 +158,9 @@ const ConsolationBracket: React.FC<ConsolationBracketProps> = ({ event, tourname
                 if (matchIndexInRound % 2 === 0) nextMatch.player1Id = winnerId;
                 else nextMatch.player2Id = winnerId;
             }
-            return { ...t, consolationBracket: bracket };
+            return newEvents;
         });
 
-        await updateDoc(doc(db, "events", event.id), { tournaments: tournamentsUpdated });
         setEditingMatch(null); setScore1(''); setScore2('');
     };
 

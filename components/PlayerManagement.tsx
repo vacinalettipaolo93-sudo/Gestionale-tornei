@@ -1,10 +1,6 @@
 import React, { useState } from 'react';
 import { type Event, type Player } from '../types';
 
-import { db } from "../firebase";
-import { doc, updateDoc } from "firebase/firestore";
-import { addPlayerAndUser } from "../utils/addPlayerAndUser";
-
 const createInitialsAvatar = (name: string): string => {
   const initials = name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
   const colors = ['#8b5cf6', '#22d3ee', '#f59e0b', '#10b981', '#ef4444', '#3b82f6'];
@@ -25,76 +21,65 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
     const [replacementTarget, setReplacementTarget] = useState<string>('');
     const [newPlayerName, setNewPlayerName] = useState('');
     const [newPlayerPhone, setNewPlayerPhone] = useState('');
-    const [loading, setLoading] = useState(false);
-
+    
     const players = event.players;
     const confirmedPlayers = players.filter(p => p.status === 'confirmed');
     const pendingPlayers = players.filter(p => p.status === 'pending');
 
-    // AGGIUNGI GIOCATORE IN FIRESTORE e CREA UTENTE
-    const handleAddPlayer = async (e: React.FormEvent) => {
+    const handleAddPlayer = (e: React.FormEvent) => {
         e.preventDefault();
         if(!newPlayerName.trim() || !newPlayerPhone.trim()) return;
-        setLoading(true);
 
-        const playerData = {
-          name: newPlayerName.trim(),
-          phone: newPlayerPhone.trim(),
-          avatar: createInitialsAvatar(newPlayerName.trim())
+        const newPlayer: Player = {
+            id: `p${Date.now()}`,
+            name: newPlayerName.trim(),
+            phone: newPlayerPhone.trim(),
+            avatar: createInitialsAvatar(newPlayerName.trim()),
+            status: 'confirmed',
         };
 
-        try {
-          await addPlayerAndUser(playerData);
-          const newPlayer: Player = {
-              id: `p${Date.now()}`,
-              name: playerData.name,
-              phone: playerData.phone,
-              avatar: playerData.avatar,
-              status: 'confirmed',
-          };
-          await updateDoc(doc(db, "events", event.id), {
-              players: [...event.players, newPlayer]
-          });
-          setNewPlayerName('');
-          setNewPlayerPhone('');
-        } catch (err) {
-          alert("Errore durante la creazione: " + (err as Error).message);
-        }
-        setLoading(false);
+        setEvents(prevEvents => prevEvents.map(e => 
+            e.id === event.id ? {...e, players: [...e.players, newPlayer]} : e
+        ));
+
+        setNewPlayerName('');
+        setNewPlayerPhone('');
     };
-
-    // CONFERMA GIOCATORE IN FIRESTORE
-    const handleConfirmPlayer = async (playerId: string) => {
-        const updatedPlayers = event.players.map(p => p.id === playerId ? {...p, status: 'confirmed'} : p);
-        await updateDoc(doc(db, "events", event.id), {
-            players: updatedPlayers
-        });
-    };
-
-    // SOSTITUISCI GIOCATORE IN FIRESTORE
-    const handleReplacePlayer = async () => {
-        if (!replacingPlayer || !replacementTarget) return;
-
-        const newTournaments = event.tournaments.map(tourn => ({
-            ...tourn,
-            groups: tourn.groups.map(group => {
-                if (!group.playerIds.includes(replacingPlayer.id)) return group;
-                return {
-                    ...group,
-                    playerIds: group.playerIds.map(id => id === replacingPlayer.id ? replacementTarget : id),
-                    matches: group.matches.map(match => {
-                        if(match.player1Id === replacingPlayer.id) return {...match, player1Id: replacementTarget};
-                        if(match.player2Id === replacingPlayer.id) return {...match, player2Id: replacementTarget};
-                        return match;
-                    })
-                };
-            })
+    
+    const handleConfirmPlayer = (playerId: string) => {
+        setEvents(prevEvents => prevEvents.map(e => {
+            if (e.id !== event.id) return e;
+            return {
+                ...e,
+                players: e.players.map(p => p.id === playerId ? {...p, status: 'confirmed'} : p)
+            }
         }));
-
-        await updateDoc(doc(db, "events", event.id), {
-            tournaments: newTournaments
-        });
-
+    };
+    
+    const handleReplacePlayer = () => {
+        if (!replacingPlayer || !replacementTarget) return;
+        
+        setEvents(prevEvents => prevEvents.map(e => {
+            if (e.id !== event.id) return e;
+            
+            const newTournaments = e.tournaments.map(tourn => ({
+                ...tourn,
+                groups: tourn.groups.map(group => {
+                    if (!group.playerIds.includes(replacingPlayer.id)) return group;
+                    return {
+                        ...group,
+                        playerIds: group.playerIds.map(id => id === replacingPlayer.id ? replacementTarget : id),
+                        matches: group.matches.map(match => {
+                            if(match.player1Id === replacingPlayer.id) return {...match, player1Id: replacementTarget};
+                            if(match.player2Id === replacingPlayer.id) return {...match, player2Id: replacementTarget};
+                            return match;
+                        })
+                    };
+                })
+            }));
+            
+            return {...e, tournaments: newTournaments};
+        }));
         setReplacingPlayer(null);
     };
 
@@ -125,8 +110,8 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                             className="flex-grow bg-secondary border border-tertiary rounded-lg p-2 text-text-primary focus:ring-2 focus:ring-accent"
                             required
                         />
-                        <button type="submit" disabled={loading} className="bg-highlight hover:bg-highlight/90 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">
-                            {loading ? "Aggiungo..." : "Aggiungi"}
+                        <button type="submit" className="bg-highlight hover:bg-highlight/90 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">
+                            Aggiungi
                         </button>
                     </form>
                 </div>

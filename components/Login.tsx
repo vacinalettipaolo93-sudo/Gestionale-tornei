@@ -2,10 +2,6 @@ import React, { useState } from 'react';
 import { type User } from '../types';
 import { TrophyIcon } from './Icons';
 
-// FIREBASE IMPORTS
-import { db } from "../firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
-
 interface LoginProps {
   users: User[];
   onLoginSuccess: (user: User) => void;
@@ -16,19 +12,10 @@ const Login: React.FC<LoginProps> = ({ users, onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  // LOGIN USANDO FIRESTORE
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Query su Firestore per trovare l'utente
-    const q = query(
-      collection(db, "users"),
-      where("username", "==", username.trim()),
-      where("password", "==", password)
-    );
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-      // Utente trovato
-      const user = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() } as User;
+    const user = users.find(u => u.username.trim().toLowerCase() === username.trim().toLowerCase() && u.password === password);
+    if (user) {
       onLoginSuccess(user);
     } else {
       setError('Username o password non validi.');

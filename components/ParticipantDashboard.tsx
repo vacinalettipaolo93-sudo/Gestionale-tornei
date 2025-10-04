@@ -9,7 +9,6 @@ interface ParticipantDashboardProps {
 }
 
 const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ events, playerId, onSelectEvent }) => {
-  // Gli eventi vengono già letti live da Firestore via App.tsx
   const myEvents = events.filter(event => 
     event.players.some(p => p.id === playerId && p.status === 'confirmed')
   );
