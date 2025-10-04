@@ -53,16 +53,16 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
   const [bookingMatch, setBookingMatch] = useState<Match | null>(null);
   const [score1, setScore1] = useState('');
   const [score2, setScore2] = useState('');
-  
   const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
-
   const selectedGroup = tournament.groups.find(g => g.id === selectedGroupId);
 
-  // FUNZIONE WRAPPER: aggiorna sia lo stato React che Firestore
+  // AGGIUNTA: Stato per la partita da riprenotare
+  const [rescheduleMatch, setRescheduleMatch] = useState<Match | null>(null);
+
+  // Funzione wrapper: aggiorna React state e Firestore
   const handleUpdateEvents = async (updater: (prevEvents: Event[]) => Event[]) => {
     setEvents(updater);
-    // Prendi il nuovo evento aggiornato
     const updatedEvents = updater([event]);
     const updatedEvent = updatedEvents.find(e => e.id === event.id);
     if (updatedEvent) {
@@ -70,13 +70,11 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
     }
   };
 
-  // BOOKING PARTITA: aggiorna anche Firestore
+  // Prenotazione match (prima prenotazione)
   const handleBookMatch = async (timeSlot: TimeSlot) => {
     if (!bookingMatch) return;
-
     const matchToBookId = bookingMatch.id;
     const timeSlotId = timeSlot.id;
-
     await handleUpdateEvents(prevEvents => prevEvents.map(e => {
         if (e.id !== event.id) return e;
         return {
@@ -101,7 +99,41 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
     setBookingMatch(null);
   }
 
-  // MODIFICA RISULTATO PARTITA: aggiorna anche Firestore
+  // AGGIUNTA: Funzione per cambiare lo slot di una partita già prenotata
+  const handleRescheduleBookMatch = async (newSlot: TimeSlot) => {
+    if (!rescheduleMatch) return;
+    const prevSlotId = tournament.timeSlots.find(ts => ts.matchId === rescheduleMatch.id)?.id;
+    await handleUpdateEvents(prevEvents => prevEvents.map(e => {
+      if (e.id !== event.id) return e;
+      return {
+        ...e,
+        tournaments: e.tournaments.map(t => {
+          if (t.id !== tournament.id) return t;
+          return {
+            ...t,
+            timeSlots: t.timeSlots.map(ts =>
+              ts.id === newSlot.id
+                ? { ...ts, matchId: rescheduleMatch.id }
+                : ts.id === prevSlotId
+                ? { ...ts, matchId: null }
+                : ts
+            ),
+            groups: t.groups.map(g => ({
+              ...g,
+              matches: g.matches.map(m =>
+                m.id === rescheduleMatch.id
+                  ? { ...m, scheduledTime: newSlot.time, location: newSlot.location }
+                  : m
+              )
+            }))
+          };
+        })
+      };
+    }));
+    setRescheduleMatch(null);
+  };
+
+  // Modifica risultato partita
   const handleUpdateMatchResult = async (matchId: string, score1: number, score2: number) => {
     await handleUpdateEvents(prevEvents => prevEvents.map(e => {
       if (e.id !== event.id) return e;
@@ -132,24 +164,21 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
     }
   };
 
-  // AGGIUNTA GIRONE: aggiorna anche Firestore
+  // Aggiunta girone
   const handleAddGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) return;
-
     const newGroup: Group = {
         id: `g${Date.now()}`,
         name: newGroupName.trim(),
         playerIds: [],
         matches: [],
     };
-
     await handleUpdateEvents(prevEvents => prevEvents.map(e => 
         e.id === event.id ? { ...e, tournaments: e.tournaments.map(t => 
                 t.id === tournament.id ? { ...t, groups: [...t.groups, newGroup] } : t
             )} : e
     ));
-
     setNewGroupName('');
     setIsAddGroupModalOpen(false);
     if (!selectedGroupId) setSelectedGroupId(newGroup.id);
@@ -205,7 +234,17 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
 
       <div className="animate-fadeIn">
         {activeTab === 'standings' && (selectedGroup ? <StandingsTable group={selectedGroup} players={event.players} settings={tournament.settings} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact}/> : <p className="text-center text-text-secondary">Nessun girone a cui partecipare.</p>)}
-        {activeTab === 'matches' && (selectedGroup ? <MatchList group={selectedGroup} players={event.players} onEditResult={handleEditResult} onBookMatch={setBookingMatch} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact}/> : <p className="text-center text-text-secondary">Nessun girone a cui partecipare.</p>)}
+        {activeTab === 'matches' && (selectedGroup ? <MatchList
+          group={selectedGroup}
+          players={event.players}
+          onEditResult={handleEditResult}
+          onBookMatch={setBookingMatch}
+          isOrganizer={isOrganizer}
+          loggedInPlayerId={loggedInPlayerId}
+          onPlayerContact={onPlayerContact}
+          // AGGIUNTA: Passa la funzione per reschedule
+          onRescheduleMatch={setRescheduleMatch}
+        /> : <p className="text-center text-text-secondary">Nessun girone a cui partecipare.</p>)}
         {activeTab === 'players' && <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={onPlayerContact}/>}
         {activeTab === 'timeSlots' && <TimeSlots event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} />}
         {activeTab === 'chat' && <ChatPanel />}
@@ -251,6 +290,30 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
             </div>
             <div className="flex justify-end mt-6">
               <button onClick={() => setBookingMatch(null)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annulla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rescheduleMatch && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Cambia slot partita</h4>
+            <p className="mb-4 text-text-secondary">
+              Scegli uno slot diverso per <strong className="text-text-primary">
+                {event.players.find(p=>p.id === rescheduleMatch.player1Id)?.name} vs {event.players.find(p=>p.id === rescheduleMatch.player2Id)?.name}
+              </strong>
+            </p>
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {tournament.timeSlots.filter(ts => !ts.matchId || ts.matchId === rescheduleMatch.id).map(ts => (
+                <button key={ts.id} onClick={() => handleRescheduleBookMatch(ts)} className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg transition-colors">
+                  <p>{new Date(ts.time).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}</p>
+                  <p className="text-sm text-text-secondary">{ts.location}</p>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end mt-6">
+              <button onClick={() => setRescheduleMatch(null)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annulla</button>
             </div>
           </div>
         </div>

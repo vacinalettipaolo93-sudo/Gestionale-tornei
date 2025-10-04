@@ -10,6 +10,8 @@ interface MatchListProps {
   isOrganizer: boolean;
   loggedInPlayerId?: string;
   onPlayerContact: (player: Player) => void;
+  // AGGIUNTA: Funzione per riprenotare partita (cambia slot)
+  onRescheduleMatch?: (match: Match) => void;
 }
 
 const MatchCard: React.FC<{
@@ -21,7 +23,10 @@ const MatchCard: React.FC<{
   isOrganizer: boolean;
   loggedInPlayerId?: string;
   onPlayerContact: (player: Player) => void;
-}> = ({ match, player1, player2, onEditResult, onBookMatch, isOrganizer, loggedInPlayerId, onPlayerContact }) => {
+  onRescheduleMatch?: (match: Match) => void;
+}> = ({
+  match, player1, player2, onEditResult, onBookMatch, isOrganizer, loggedInPlayerId, onPlayerContact, onRescheduleMatch
+}) => {
   if (!player1 || !player2) return null;
 
   const isParticipant = loggedInPlayerId === player1.id || loggedInPlayerId === player2.id;
@@ -82,18 +87,35 @@ const MatchCard: React.FC<{
             Risultato
           </button>
         )}
-         {!isOrganizer && isParticipant && (
+        {!isOrganizer && isParticipant && (
             <button onClick={() => onPlayerContact(opponent)} className="text-green-400 hover:text-green-300 transition-colors" title={`Contatta ${opponent.name} su WhatsApp`}>
                 <WhatsAppIcon />
             </button>
-         )}
+        )}
+        {/* AGGIUNTA: Pulsante per cambiare slot */}
+        {match.status === 'scheduled' && canBook && onRescheduleMatch && (
+          <button
+            onClick={() => onRescheduleMatch(match)}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors"
+          >
+            Cambia slot
+          </button>
+        )}
       </div>
     </div>
   );
 };
 
-
-const MatchList: React.FC<MatchListProps> = ({ group, players, onEditResult, onBookMatch, isOrganizer, loggedInPlayerId, onPlayerContact }) => {
+const MatchList: React.FC<MatchListProps> = ({
+  group,
+  players,
+  onEditResult,
+  onBookMatch,
+  isOrganizer,
+  loggedInPlayerId,
+  onPlayerContact,
+  onRescheduleMatch
+}) => {
   const [filter, setFilter] = useState<'all' | 'my'>(isOrganizer ? 'all' : 'my');
   
   const getPlayer = (playerId: string) => players.find(p => p.id === playerId);
@@ -123,7 +145,18 @@ const MatchList: React.FC<MatchListProps> = ({ group, players, onEditResult, onB
             <h4 className="text-lg font-semibold mb-3 text-accent">Partite da Fare</h4>
             <div className="space-y-3">
                 {pendingMatches.length > 0 ? pendingMatches.map(match => (
-                    <MatchCard key={match.id} match={match} player1={getPlayer(match.player1Id)} player2={getPlayer(match.player2Id)} onEditResult={onEditResult} onBookMatch={onBookMatch} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact} />
+                    <MatchCard
+                      key={match.id}
+                      match={match}
+                      player1={getPlayer(match.player1Id)}
+                      player2={getPlayer(match.player2Id)}
+                      onEditResult={onEditResult}
+                      onBookMatch={onBookMatch}
+                      isOrganizer={isOrganizer}
+                      loggedInPlayerId={loggedInPlayerId}
+                      onPlayerContact={onPlayerContact}
+                      onRescheduleMatch={onRescheduleMatch}
+                    />
                 )) : <p className="text-text-secondary text-center py-4">Nessuna partita da disputare.</p>}
             </div>
         </div>
@@ -131,7 +164,18 @@ const MatchList: React.FC<MatchListProps> = ({ group, players, onEditResult, onB
             <h4 className="text-lg font-semibold mb-3 text-accent">Partite Programmate</h4>
             <div className="space-y-3">
                 {scheduledMatches.length > 0 ? scheduledMatches.map(match => (
-                    <MatchCard key={match.id} match={match} player1={getPlayer(match.player1Id)} player2={getPlayer(match.player2Id)} onEditResult={onEditResult} onBookMatch={onBookMatch} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact} />
+                    <MatchCard
+                      key={match.id}
+                      match={match}
+                      player1={getPlayer(match.player1Id)}
+                      player2={getPlayer(match.player2Id)}
+                      onEditResult={onEditResult}
+                      onBookMatch={onBookMatch}
+                      isOrganizer={isOrganizer}
+                      loggedInPlayerId={loggedInPlayerId}
+                      onPlayerContact={onPlayerContact}
+                      onRescheduleMatch={onRescheduleMatch}
+                    />
                 )) : <p className="text-text-secondary text-center py-4">Nessuna partita in programma.</p>}
             </div>
         </div>
@@ -139,7 +183,18 @@ const MatchList: React.FC<MatchListProps> = ({ group, players, onEditResult, onB
             <h4 className="text-lg font-semibold mb-3 text-accent">Partite Completate</h4>
             <div className="space-y-3">
                 {completedMatches.length > 0 ? completedMatches.map(match => (
-                    <MatchCard key={match.id} match={match} player1={getPlayer(match.player1Id)} player2={getPlayer(match.player2Id)} onEditResult={onEditResult} onBookMatch={onBookMatch} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact} />
+                    <MatchCard
+                      key={match.id}
+                      match={match}
+                      player1={getPlayer(match.player1Id)}
+                      player2={getPlayer(match.player2Id)}
+                      onEditResult={onEditResult}
+                      onBookMatch={onBookMatch}
+                      isOrganizer={isOrganizer}
+                      loggedInPlayerId={loggedInPlayerId}
+                      onPlayerContact={onPlayerContact}
+                      onRescheduleMatch={onRescheduleMatch}
+                    />
                 )) : <p className="text-text-secondary text-center py-4">Nessuna partita ancora giocata.</p>}
             </div>
         </div>
