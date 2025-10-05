@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { type Event, type Player } from '../types';
-import { addPlayerAndUser } from "../utils/addPlayerAndUser";
 import { db } from "../firebase";
-import { updateDoc, doc } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc } from "firebase/firestore";
 
 const createInitialsAvatar = (name: string): string => {
   const initials = name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
@@ -19,6 +18,73 @@ interface PlayerManagementProps {
   onPlayerContact: (player: Player) => void;
 }
 
+// Funzione anti-doppioni per aggiungere giocatore e utente
+async function addPlayerAndUserNoDuplicates(event: Event, playerData: { name: string; phone: string; avatar: string; }) {
+  // 1. Cerca se esiste già il player globale
+  const playersRef = collection(db, "players");
+  const q = query(playersRef, where("name", "==", playerData.name), where("phone", "==", playerData.phone));
+  const existingPlayersSnap = await getDocs(q);
+
+  let playerId;
+  if (!existingPlayersSnap.empty) {
+    // Player esiste già
+    const playerDoc = existingPlayersSnap.docs[0];
+    playerId = playerDoc.id;
+  } else {
+    // Crea nuovo player
+    const playerDocRef = await addDoc(playersRef, {
+      name: playerData.name,
+      phone: playerData.phone,
+      avatar: playerData.avatar,
+      status: "confirmed"
+    });
+    playerId = playerDocRef.id;
+  }
+
+  // 2. Cerca se esiste già l'utente
+  const usersRef = collection(db, "users");
+  const userQ = query(usersRef, where("username", "==", playerData.name));
+  const userSnap = await getDocs(userQ);
+  if (userSnap.empty) {
+    await addDoc(usersRef, {
+      username: playerData.name,
+      password: "1234",
+      role: "participant",
+      playerId
+    });
+  }
+
+  // 3. Aggiungi il player all'evento solo se non è già presente
+  const alreadyInEvent = event.players.some(p => p.id === playerId);
+  if (!alreadyInEvent) {
+    const newPlayer = {
+      id: playerId,
+      name: playerData.name,
+      phone: playerData.phone,
+      avatar: playerData.avatar,
+      status: "confirmed"
+    };
+    const updatedPlayers = [...event.players, newPlayer];
+    await updateDoc(doc(db, "events", event.id), { players: updatedPlayers });
+  }
+}
+
+// Funzione per cancellare giocatore da evento e da Firestore
+async function removePlayerCompletely(event: Event, playerId: string) {
+  // 1. Rimuovi giocatore dalla lista event.players
+  const updatedPlayers = event.players.filter(p => p.id !== playerId);
+  await updateDoc(doc(db, "events", event.id), { players: updatedPlayers });
+
+  // 2. Cancella giocatore dalla collection "players"
+  await deleteDoc(doc(db, "players", playerId));
+
+  // 3. (Opzionale) Cancella utente dalla collection "users"
+  const usersRef = collection(db, "users");
+  const userQ = query(usersRef, where("playerId", "==", playerId));
+  const userSnap = await getDocs(userQ);
+  userSnap.forEach(u => deleteDoc(u.ref));
+}
+
 const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, isOrganizer, onPlayerContact }) => {
     const [replacingPlayer, setReplacingPlayer] = useState<Player | null>(null);
     const [replacementTarget, setReplacementTarget] = useState<string>('');
@@ -30,27 +96,27 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
     const confirmedPlayers = players.filter(p => p.status === 'confirmed');
     const pendingPlayers = players.filter(p => p.status === 'pending');
 
-    // AGGIUNGI GIOCATORE: crea player globale, utente, aggiorna evento
+    // AGGIUNGI GIOCATORE: anti-doppioni
     const handleAddPlayer = async (e: React.FormEvent) => {
         e.preventDefault();
         if(!newPlayerName.trim() || !newPlayerPhone.trim()) return;
         setLoading(true);
 
         try {
-          await addPlayerAndUser(event, {
+          await addPlayerAndUserNoDuplicates(event, {
             name: newPlayerName.trim(),
             phone: newPlayerPhone.trim(),
             avatar: createInitialsAvatar(newPlayerName.trim())
           });
-          // Aggiorna React state locale
-          setEvents(prevEvents => prevEvents.map(e =>
-            e.id === event.id
+          // Aggiorna React state locale (ricarica i dati da Firestore)
+          setEvents(prevEvents => prevEvents.map(ev =>
+            ev.id === event.id
               ? {
-                  ...e,
+                  ...ev,
                   players: [
-                    ...e.players,
+                    ...ev.players,
                     {
-                      id: e.players.length > 0 ? e.players[e.players.length - 1].id : `p${Date.now()}`,
+                      id: ev.players.length > 0 ? ev.players[ev.players.length - 1].id : `p${Date.now()}`,
                       name: newPlayerName.trim(),
                       phone: newPlayerPhone.trim(),
                       avatar: createInitialsAvatar(newPlayerName.trim()),
@@ -58,7 +124,7 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                     }
                   ]
                 }
-              : e
+              : ev
           ));
           setNewPlayerName('');
           setNewPlayerPhone('');
@@ -81,6 +147,25 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
         await updateDoc(doc(db, "events", event.id), {
             players: updatedPlayers
         });
+    };
+
+    // ELIMINA GIOCATORE DA SISTEMA (evento + firebase)
+    const handleDeletePlayer = async (playerId: string) => {
+      setLoading(true);
+      try {
+        await removePlayerCompletely(event, playerId);
+        setEvents(prevEvents => prevEvents.map(ev =>
+          ev.id === event.id
+            ? {
+                ...ev,
+                players: ev.players.filter(p => p.id !== playerId)
+              }
+            : ev
+        ));
+      } catch (err) {
+        alert("Errore cancellazione: " + (err as Error).message);
+      }
+      setLoading(false);
     };
 
     // SOSTITUISCI GIOCATORE E AGGIORNA FIRESTORE
@@ -162,6 +247,9 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                                     <button onClick={() => handleConfirmPlayer(player.id)} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">
                                         Conferma
                                     </button>
+                                    <button onClick={() => handleDeletePlayer(player.id)} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm ml-2">
+                                        Elimina
+                                    </button>
                                 </li>
                             ))}
                         </ul>
@@ -186,6 +274,9 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                                 <div className="flex gap-2">
                                     <button onClick={() => setReplacingPlayer(player)} className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">
                                         Sostituisci
+                                    </button>
+                                    <button onClick={() => handleDeletePlayer(player.id)} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">
+                                        Elimina
                                     </button>
                                 </div>
                             )}
