@@ -194,7 +194,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
       {id: 'playoffs', name: 'Playoff', isVisible: () => isOrganizer || (tournament.playoffs?.isGenerated ?? false)},
       {id: 'consolation', name: 'Consolazione', isVisible: () => isOrganizer || (tournament.consolationBracket?.isGenerated ?? false)},
       {id: 'groupManagement', name: 'Gestione Gironi', isVisible: () => isOrganizer},
-      {id: 'settings', name: 'Impostazioni', isVisible: () => isOrganizer},
+      {id: 'settings', name: 'Impostazioni', isVisible: () => isOrganizer}, // <-- controllo corretto!
       {id: 'chat', name: 'chat', isVisible: () => true},
   ];
 
@@ -242,14 +242,15 @@ const TournamentView: React.FC<TournamentViewProps> = ({ event, tournament, setE
           isOrganizer={isOrganizer}
           loggedInPlayerId={loggedInPlayerId}
           onPlayerContact={onPlayerContact}
-          // AGGIUNTA: Passa la funzione per reschedule
           onRescheduleMatch={setRescheduleMatch}
         /> : <p className="text-center text-text-secondary">Nessun girone a cui partecipare.</p>)}
         {activeTab === 'players' && <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={onPlayerContact}/>}
         {activeTab === 'timeSlots' && <TimeSlots event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} />}
         {activeTab === 'chat' && <ChatPanel />}
         {activeTab === 'groupManagement' && isOrganizer && <GroupManagement event={event} tournament={tournament} setEvents={setEvents} />}
-        {activeTab === 'settings' && isOrganizer && <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />}
+        {activeTab === 'settings' && isOrganizer && (
+          <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />
+        )}
         {activeTab === 'playoffs' && <Playoffs event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId}/>}
         {activeTab === 'consolation' && <ConsolationBracket event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} />}
       </div>
