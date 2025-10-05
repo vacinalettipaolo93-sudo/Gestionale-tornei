@@ -92,7 +92,10 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
     const [newPlayerPhone, setNewPlayerPhone] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const players = event.players;
+    // DEDUPLICA giocatori per id nella lista visualizzata
+    const players = event.players.filter(
+      (p, i, arr) => arr.findIndex(pp => pp.id === p.id) === i
+    );
     const confirmedPlayers = players.filter(p => p.status === 'confirmed');
     const pendingPlayers = players.filter(p => p.status === 'pending');
 
@@ -108,20 +111,15 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
             phone: newPlayerPhone.trim(),
             avatar: createInitialsAvatar(newPlayerName.trim())
           });
-          // Aggiorna React state locale (ricarica i dati da Firestore)
+          // Aggiorna React state locale SENZA DUPLICATI
           setEvents(prevEvents => prevEvents.map(ev =>
             ev.id === event.id
               ? {
                   ...ev,
                   players: [
-                    ...ev.players,
-                    {
-                      id: ev.players.length > 0 ? ev.players[ev.players.length - 1].id : `p${Date.now()}`,
-                      name: newPlayerName.trim(),
-                      phone: newPlayerPhone.trim(),
-                      avatar: createInitialsAvatar(newPlayerName.trim()),
-                      status: "confirmed"
-                    }
+                    ...ev.players.filter(
+                      (p, i, arr) => arr.findIndex(pp => pp.id === p.id) === i
+                    )
                   ]
                 }
               : ev
