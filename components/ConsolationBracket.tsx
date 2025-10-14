@@ -40,7 +40,6 @@ const ConsolationBracket: React.FC<ConsolationBracketProps> = ({ event, tourname
     }, [qualifiers]);
     
     const [firstRoundAssignments, setFirstRoundAssignments] = useState<(string | null)[]>([]);
-
     const [editingMatch, setEditingMatch] = useState<PlayoffMatch | null>(null);
     const [score1, setScore1] = useState('');
     const [score2, setScore2] = useState('');
@@ -211,7 +210,14 @@ const ConsolationBracket: React.FC<ConsolationBracketProps> = ({ event, tourname
                 >
                     <option value="">-- Seleziona --</option>
                     {currentValue && currentValue !== 'BYE' && <option value={currentValue}>{currentPlayer?.name}</option>}
-                    {unassignedPlayers.map(p => (
+                    {unassignedPlayers
+                        .slice()
+                        .sort((a, b) => {
+                            const playerA = getPlayer(a.playerId);
+                            const playerB = getPlayer(b.playerId);
+                            return (playerA?.name || '').localeCompare(playerB?.name || '');
+                        })
+                        .map(p => (
                         <option key={p.playerId} value={p.playerId}>{getPlayer(p.playerId)?.name}</option>
                     ))}
                     {(byesAssigned < numByesAvailable || currentValue === 'BYE') && <option value="BYE">-- BYE --</option>}
@@ -237,7 +243,7 @@ const ConsolationBracket: React.FC<ConsolationBracketProps> = ({ event, tourname
                     </div>
 
                     <div className="mt-8">
-                         <button onClick={handleGenerateBracket} disabled={firstRoundAssignments.some(a => a === null) || qualifiers.length < 2} className="w-full bg-highlight hover:bg-highlight/90 text-white font-bold py-3 px-6 rounded-lg transition-colors disabled:bg-tertiary disabled:cursor-not-allowed shadow-lg shadow-highlight/20">
+                         <button onClick={handleGenerateBracket} disabled={firstRoundAssignments.some(a => a === null) || qualifiers.length < 2} className="w-full bg-highlight hover:bg-highlight/90 text-white font-bold py-2 px-4 rounded-lg transition-colors text-lg">
                             Genera Tabellone
                         </button>
                     </div>
@@ -253,7 +259,14 @@ const ConsolationBracket: React.FC<ConsolationBracketProps> = ({ event, tourname
                     </div>
                     <h4 className="font-semibold text-lg mb-3">Giocatori da Assegnare</h4>
                      <div className="space-y-2">
-                        {unassignedPlayers.length > 0 ? unassignedPlayers.map(q => {
+                        {unassignedPlayers.length > 0 ? unassignedPlayers
+                            .slice()
+                            .sort((a, b) => {
+                                const playerA = getPlayer(a.playerId);
+                                const playerB = getPlayer(b.playerId);
+                                return (playerA?.name || '').localeCompare(playerB?.name || '');
+                            })
+                            .map(q => {
                             const player = getPlayer(q.playerId);
                             return (
                                 <div key={q.playerId} className="bg-tertiary/50 p-2 rounded-lg flex items-center gap-3">
@@ -263,8 +276,10 @@ const ConsolationBracket: React.FC<ConsolationBracketProps> = ({ event, tourname
                                         <div className="text-xs text-text-secondary">{q.rank}° class. {q.groupName}</div>
                                     </div>
                                 </div>
-                            )
-                        }) : <p className="text-text-secondary text-sm italic">Tutti i giocatori sono stati assegnati.</p>}
+                            );
+                        })
+                        : <p className="text-text-secondary text-sm italic">Tutti i giocatori sono stati assegnati.</p>
+                        }
                     </div>
                 </div>
             </div>
@@ -312,7 +327,7 @@ const ConsolationBracket: React.FC<ConsolationBracketProps> = ({ event, tourname
                 </div>
                 {canEdit && (
                     <div className="text-center mt-2">
-                        <button onClick={() => { setEditingMatch(match); setScore1(match.score1?.toString() ?? ''); setScore2(match.score2?.toString() ?? ''); }} className="text-xs bg-highlight/80 hover:bg-highlight px-2 py-1 rounded-md text-white transition-colors">Risultato</button>
+                        <button onClick={() => { setEditingMatch(match); setScore1(match.score1?.toString() ?? ''); setScore2(match.score2?.toString() ?? ''); }} className="text-xs bg-highlight/80 hover:bg-highlight text-white px-3 py-1 rounded-lg font-bold">Inserisci Risultato</button>
                     </div>
                 )}
             </div>
@@ -326,7 +341,8 @@ const ConsolationBracket: React.FC<ConsolationBracketProps> = ({ event, tourname
         <div className="bg-secondary p-2 md:p-6 rounded-xl shadow-lg">
              <div className="text-center mb-6">
                  <h3 className="text-2xl font-bold text-accent">Tabellone di Consolazione</h3>
-                 {winner && <div className="mt-2 text-lg text-yellow-400 font-bold animate-subtlePulse">🏆 Vincitore: {winner.name} 🏆</div>}
+                 {winner && <div className="mt-2 text-lg text-yellow-400 font-bold animate-subtlePulse">
+🏆 Vincitore: {winner.name} 🏆</div>}
                  {isOrganizer && <button onClick={() => setIsResetModalOpen(true)} className="mt-2 text-sm text-yellow-500 hover:text-yellow-400 underline">Modifica Tabellone</button>}
              </div>
              <div className="flex justify-start items-stretch gap-4 md:gap-10 overflow-x-auto pb-4 px-2">
