@@ -45,7 +45,10 @@ export default function Utenti() {
         <button type="submit">Aggiungi</button>
       </form>
       <ul>
-        {utenti.map(utente => (
+        {utenti
+          .slice()
+          .sort((a, b) => a.nome.localeCompare(b.nome))
+          .map(utente => (
           <li key={utente.id}>
             {editId === utente.id ? (
               <form onSubmit={modificaUtente} style={{ display: "inline" }}>
