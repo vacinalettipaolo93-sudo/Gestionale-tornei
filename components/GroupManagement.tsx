@@ -179,7 +179,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                                                 <img src={player.avatar} alt={player.name} className="w-8 h-8 rounded-full flex-shrink-0 object-cover" />
                                                 <span className="text-sm font-medium truncate">{player.name}</span>
                                             </div>
-                                            <button onClick={() => setPlayerToRemove({player, group})} className="opacity-0 group-hover/player:opacity-100 text-text-secondary/50 hover:text-red-500 transition-all">
+                                            <button onClick={() => setPlayerToRemove({player, group})} className="opacity-0 group-hover/player:opacity-100 text-text-secondary/50 hover:text-red-500 transition-opacity">
                                                 <TrashIcon className="w-4 h-4" />
                                             </button>
                                         </li>
@@ -199,7 +199,11 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                     <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-lg border border-tertiary">
                         <h4 className="text-lg font-bold mb-4">Assegna Giocatori a {assigningGroup.name}</h4>
                         <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
-                           {event.players.filter(p=>p.status === 'confirmed').map(player => (
+                           {event.players
+                             .filter(p=>p.status === 'confirmed')
+                             .slice()
+                             .sort((a, b) => a.name.localeCompare(b.name))
+                             .map(player => (
                                 <label key={player.id} className="flex items-center gap-3 p-2 bg-tertiary/50 rounded-lg cursor-pointer hover:bg-tertiary">
                                     <input
                                         type="checkbox"
@@ -225,7 +229,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
                     <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
                         <h4 className="text-lg font-bold mb-4">Conferma Rimozione</h4>
-                        <p className="text-text-secondary">Sei sicuro di voler rimuovere {playerToRemove.player.name} dal girone {playerToRemove.group.name}? Tutte le sue partite verranno eliminate.</p>
+                        <p className="text-text-secondary">Sei sicuro di voler rimuovere {playerToRemove.player.name} dal girone {playerToRemove.group.name}? Tutte le sue partite verranno eliminate dal girone.</p>
                         <div className="flex justify-end gap-4 mt-6">
                             <button onClick={() => setPlayerToRemove(null)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annulla</button>
                             <button onClick={handleRemovePlayer} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Rimuovi</button>
