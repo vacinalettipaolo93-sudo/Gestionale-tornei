@@ -233,7 +233,10 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                     <h4 className="text-lg font-semibold mb-3">Richieste di Iscrizione</h4>
                     {pendingPlayers.length > 0 ? (
                         <ul className="space-y-3">
-                            {pendingPlayers.map(player => (
+                            {pendingPlayers
+                                .slice()
+                                .sort((a, b) => a.name.localeCompare(b.name))
+                                .map(player => (
                                 <li key={player.id} className="flex items-center justify-between bg-tertiary/50 p-3 rounded-lg">
                                     <div className="flex items-center gap-3">
                                         <img src={player.avatar} alt={player.name} className="w-10 h-10 rounded-full object-cover"/>
@@ -259,7 +262,10 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
             <div>
                 <h4 className="text-lg font-semibold mb-3">Partecipanti Confermati</h4>
                 <ul className="space-y-3">
-                    {confirmedPlayers.map(player => (
+                    {confirmedPlayers
+                        .slice()
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(player => (
                         <li key={player.id} className="flex items-center justify-between bg-tertiary/50 p-3 rounded-lg">
                              <button onClick={() => onPlayerContact(player)} className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity">
                                 <img src={player.avatar} alt={player.name} className="w-10 h-10 rounded-full object-cover"/>
@@ -295,7 +301,10 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                                 className="w-full bg-primary border border-tertiary rounded-lg p-2 text-text-primary focus:ring-2 focus:ring-accent"
                             >
                                 <option value="">Seleziona un giocatore</option>
-                                {potentialReplacements.map(p => (
+                                {potentialReplacements
+                                    .slice()
+                                    .sort((a, b) => a.name.localeCompare(b.name))
+                                    .map(p => (
                                     <option key={p.id} value={p.id}>{p.name}</option>
                                 ))}
                             </select>
