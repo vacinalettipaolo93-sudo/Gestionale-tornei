@@ -7,7 +7,7 @@ const createInitialsAvatar = (name: string): string => {
   const initials = name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
   const colors = ['#8b5cf6', '#22d3ee', '#f59e0b', '#10b981', '#ef4444', '#3b82f6'];
   const color = colors[initials.charCodeAt(0) % colors.length];
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><rect width="100" height="100" fill="${color}"/><text x="50" y="50" font-family="Arial, sans-serif" font-size="50" fill="white" text-anchor="middle" dominant-baseline="central" dy=".1em">${initials}</text></svg>`;
+  const svg = `<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\" width=\"100\" height=\"100\"><rect width=\"100\" height=\"100\" fill=\"${color}\"/><text x=\"50\" y=\"50\" font-family=\"Arial, sans-serif\" font-size=\"50\" fill=\"white\" text-anchor=\"middle\" dominant-baseline=\"central\" dy=\".1em\">${initials}</text></svg>`;
   return `data:image/svg+xml;base64,${btoa(svg)}`;
 };
 
@@ -200,7 +200,7 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
 
     return (
         <div className="bg-secondary p-6 rounded-xl shadow-lg">
-            <h3 className="text-xl font-bold mb-6 text-accent">Partecipanti</h3>
+            <h3 className="text-xl font-bold mb-6 text-accent">Partecipanti ({confirmedPlayers.length})</h3>
             
              {isOrganizer && (
                 <>
@@ -230,32 +230,31 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                 </div>
 
                 <div className="mb-8">
-                    <h4 className="text-lg font-semibold mb-3">Richieste di Iscrizione</h4>
+                    <h4 className="text-lg font-semibold mb-3">Richieste di Iscrizione ({pendingPlayers.length})</h4>
                     {pendingPlayers.length > 0 ? (
                         <ul className="space-y-3">
                             {pendingPlayers
                                 .slice()
                                 .sort((a, b) => a.name.localeCompare(b.name))
-                                .map(player => (
+                                .map((player, idx) => (
                                 <li key={player.id} className="flex items-center justify-between bg-tertiary/50 p-3 rounded-lg">
                                     <div className="flex items-center gap-3">
                                         <img src={player.avatar} alt={player.name} className="w-10 h-10 rounded-full object-cover"/>
                                         <div>
-                                            <div className="font-semibold">{player.name}</div>
+                                            <div className="font-semibold">{idx + 1}. {player.name}</div>
                                             <div className="text-sm text-text-secondary">{player.phone}</div>
                                         </div>
                                     </div>
-                                    <button onClick={() => handleConfirmPlayer(player.id)} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">
+                                    <button onClick={() => handleConfirmPlayer(player.id)} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
                                         Conferma
                                     </button>
-                                    <button onClick={() => handleDeletePlayer(player.id)} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm ml-2">
+                                    <button onClick={() => handleDeletePlayer(player.id)} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
                                         Elimina
                                     </button>
                                 </li>
                             ))}
                         </ul>
-                    ) : <p className="text-text-secondary italic">Nessuna richiesta di iscrizione in attesa.</p>}
-                </div>
+                    ) : <p className="text-text-secondary italic">Nessuna richiesta di iscrizione in attesa.</p>}</div>
                 </>
              )}
 
@@ -265,12 +264,12 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                     {confirmedPlayers
                         .slice()
                         .sort((a, b) => a.name.localeCompare(b.name))
-                        .map(player => (
+                        .map((player, idx) => (
                         <li key={player.id} className="flex items-center justify-between bg-tertiary/50 p-3 rounded-lg">
                              <button onClick={() => onPlayerContact(player)} className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity">
                                 <img src={player.avatar} alt={player.name} className="w-10 h-10 rounded-full object-cover"/>
                                 <div>
-                                    <div className="font-semibold">{player.name}</div>
+                                    <div className="font-semibold">{idx + 1}. {player.name}</div>
                                     <div className="text-sm text-text-secondary">{player.phone}</div>
                                 </div>
                             </button>
@@ -311,7 +310,9 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                         </div>
                         <div className="flex justify-end gap-4 mt-6">
                             <button onClick={() => setReplacingPlayer(null)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annulla</button>
-                            <button onClick={handleReplacePlayer} disabled={!replacementTarget} className="bg-highlight hover:bg-highlight/80 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-tertiary disabled:cursor-not-allowed">Conferma Sostituzione</button>
+                            <button onClick={handleReplacePlayer} disabled={!replacementTarget} className="bg-highlight hover:bg-highlight/80 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                                Conferma Sostituzione
+                            </button>
                         </div>
                     </div>
                 </div>
