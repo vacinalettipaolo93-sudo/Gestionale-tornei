@@ -5,26 +5,20 @@ import { db } from "../firebase";
 import { updateDoc, doc } from "firebase/firestore";
 
 interface TimeSlotsProps {
-    event?: Event | null;
-    tournament?: Tournament | null;
-    setEvents?: React.Dispatch<React.SetStateAction<Event[]>>;
+    event: Event;
+    tournament: Tournament;
+    setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
     isOrganizer: boolean;
     loggedInPlayerId?: string;
     selectedGroupId?: string;
     onSlotBook?: (slot: TimeSlot) => void;
     onRequestReschedule?: (match: Match) => void;
     onRequestCancelBooking?: (match: Match) => void;
-    viewingOwnGroup?: boolean;
 }
 
-const TimeSlots: React.FC<TimeSlotsProps> = ({ event = null, tournament = null, setEvents, isOrganizer, loggedInPlayerId, selectedGroupId, onSlotBook, onRequestReschedule, onRequestCancelBooking, viewingOwnGroup = false }) => {
+const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isOrganizer, loggedInPlayerId, selectedGroupId, onSlotBook, onRequestReschedule, onRequestCancelBooking }) => {
     const [newTime, setNewTime] = useState('');
     const [newLocation, setNewLocation] = useState('');
-
-    // defensive: if tournament missing, show message
-    if (!tournament || !event) {
-      return <p className="text-center text-text-secondary py-6">Dati torneo non disponibili.</p>;
-    }
 
     const handleAddSlot = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -38,12 +32,10 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event = null, tournament = null, 
         };
 
         const updatedTimeSlots = [...tournament.timeSlots, newSlot].sort((a,b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-        if (setEvents) {
-          setEvents(prev => prev.map(ev => ev.id === event.id ? {
+        setEvents(prev => prev.map(ev => ev.id === event.id ? {
             ...ev,
             tournaments: ev.tournaments.map(t => t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t)
-          } : ev));
-        }
+        } : ev));
 
         await updateDoc(doc(db, "events", event.id), {
             tournaments: event.tournaments.map(t =>
@@ -51,17 +43,16 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event = null, tournament = null, 
             )
         });
 
-        // keep inputs for admin convenience
+        setNewTime('');
+        setNewLocation('');
     };
 
     const handleDeleteSlot = async (slotId: string) => {
         const updatedTimeSlots = tournament.timeSlots.filter(ts => ts.id !== slotId);
-        if (setEvents) {
-          setEvents(prev => prev.map(ev => ev.id === event.id ? {
-              ...ev,
-              tournaments: ev.tournaments.map(t => t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t)
-          } : ev));
-        }
+        setEvents(prev => prev.map(ev => ev.id === event.id ? {
+            ...ev,
+            tournaments: ev.tournaments.map(t => t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t)
+        } : ev));
         await updateDoc(doc(db, "events", event.id), {
             tournaments: event.tournaments.map(t =>
                 t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t
@@ -96,10 +87,12 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event = null, tournament = null, 
       return null;
     };
 
+    // trova girone dell'utente
     const playerGroup = loggedInPlayerId ? tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId)) : undefined;
     const effectiveGroup = selectedGroupId ? tournament.groups.find(g => g.id === selectedGroupId) : playerGroup;
     const isParticipantInGroup = !!(effectiveGroup && loggedInPlayerId && effectiveGroup.playerIds.includes(loggedInPlayerId));
 
+    // trova match dall'id
     const findMatchById = (matchId?: string | null) : Match | undefined => {
         if (!matchId) return undefined;
         for (const g of tournament.groups) {
@@ -134,10 +127,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event = null, tournament = null, 
                             Aggiungi
                         </button>
                     </form>
-
-                    <p className="text-sm text-text-secondary mt-2">
-                      Nota: l'ultimo orario e luogo inseriti rimangono nei campi per facilitare inserimenti successivi.
-                    </p>
                 </div>
             )}
             <div className="bg-secondary p-6 rounded-xl shadow-lg">
@@ -146,7 +135,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event = null, tournament = null, 
                     {tournament.timeSlots.length > 0 ? tournament.timeSlots.map(slot => {
                         const match = findMatchById(slot.matchId);
                         const isParticipantOfThisMatch = !!(match && loggedInPlayerId && (match.player1Id === loggedInPlayerId || match.player2Id === loggedInPlayerId));
-                        const canManageThisSlot = isOrganizer || (isParticipantOfThisMatch && !!viewingOwnGroup);
                         const scoreCenter = getMatchScore(slot.matchId);
                         return (
                         <div key={slot.id} className={`p-3 rounded-lg flex flex-col justify-between items-stretch ${slot.matchId ? 'bg-primary/50' : 'bg-green-500/10 border border-green-500/30'}`}>
@@ -166,13 +154,13 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event = null, tournament = null, 
                             </div>
 
                             <div className="flex items-center justify-center gap-3">
-                                {!slot.matchId && onSlotBook && isParticipantInGroup && viewingOwnGroup && (
+                                {!slot.matchId && onSlotBook && isParticipantInGroup && (
                                     <button onClick={() => onSlotBook(slot)} className="bg-accent/80 hover:bg-accent text-primary font-bold py-2 px-3 rounded-lg text-sm transition-colors">
                                         Prenota
                                     </button>
                                 )}
 
-                                {slot.matchId && canManageThisSlot && match && (
+                                {slot.matchId && (isOrganizer || isParticipantOfThisMatch) && match && (
                                     <>
                                         {onRequestReschedule && (
                                             <button onClick={() => onRequestReschedule(match)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
