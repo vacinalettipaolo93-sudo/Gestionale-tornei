@@ -84,6 +84,17 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
         return 'Partita non trovata';
     };
 
+    const getMatchScore = (matchId?: string | null) => {
+      if (!matchId) return null;
+      for (const group of tournament.groups) {
+        const match = group.matches.find(m => m.id === matchId);
+        if (match && match.score1 != null && match.score2 != null) {
+          return `${match.score1} — ${match.score2}`;
+        }
+      }
+      return null;
+    };
+
     // trova il girone del giocatore (se esiste)
     const playerGroup = loggedInPlayerId ? tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId)) : undefined;
     // Se selectedGroupId è passato, preferiamolo
@@ -134,13 +145,26 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
                         const match = findMatchById(slot.matchId);
                         // se la slot è occupata e l'utente è uno dei due giocatori o organizer, mostro Modifica/Annulla
                         const isParticipantOfThisMatch = !!(match && loggedInPlayerId && (match.player1Id === loggedInPlayerId || match.player2Id === loggedInPlayerId));
+                        const scoreCenter = getMatchScore(slot.matchId);
                         return (
-                        <div key={slot.id} className={`p-3 rounded-lg flex justify-between items-center ${slot.matchId ? 'bg-primary/50' : 'bg-green-500/10 border border-green-500/30'}`}>
-                            <div>
-                                <p className="font-semibold">{new Date(slot.time).toLocaleString('it-IT', { dateStyle: 'long', timeStyle: 'short' })} - {slot.location}</p>
-                                <p className={`text-sm ${slot.matchId ? 'text-text-secondary' : 'text-green-400'}`}>{slot.matchId ? `Occupato da: ${getMatchPlayers(slot.matchId)}` : 'Libero'}</p>
+                        <div key={slot.id} className={`p-3 rounded-lg flex flex-col justify-between items-stretch ${slot.matchId ? 'bg-primary/50' : 'bg-green-500/10 border border-green-500/30'}`}>
+                            <div className="mb-2">
+                              <p className="font-semibold text-center">{new Date(slot.time).toLocaleString('it-IT', { dateStyle: 'long', timeStyle: 'short' })}</p>
+                              <p className="text-sm text-text-secondary text-center">{slot.location}</p>
                             </div>
-                            <div className="flex items-center gap-3">
+
+                            {/* Centro: risultato (se presente) o nome partita */}
+                            <div className="flex items-center justify-center mb-2">
+                              {scoreCenter ? (
+                                <div className="text-2xl font-bold text-center">{scoreCenter}</div>
+                              ) : slot.matchId && match ? (
+                                <div className="text-center text-sm text-text-primary">{getMatchPlayers(slot.matchId)}</div>
+                              ) : (
+                                <div className="text-center text-green-400">Libero</div>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-center gap-3">
                                 {/* Prenota per partecipanti (slot libero) */}
                                 {!slot.matchId && onSlotBook && isParticipantInGroup && (
                                     <button onClick={() => onSlotBook(slot)} className="bg-accent/80 hover:bg-accent text-primary font-bold py-2 px-3 rounded-lg text-sm transition-colors">
@@ -153,12 +177,12 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
                                     <>
                                         {onRequestReschedule && (
                                             <button onClick={() => onRequestReschedule(match)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
-                                                Modifica
+                                                Modifica pren.
                                             </button>
                                         )}
                                         {onRequestCancelBooking && (
                                             <button onClick={() => onRequestCancelBooking(match)} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
-                                                Annulla
+                                                Annulla pren.
                                             </button>
                                         )}
                                     </>
