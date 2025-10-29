@@ -35,9 +35,10 @@ const MatchCard: React.FC<{
   const isParticipant = loggedInPlayerId === player1.id || loggedInPlayerId === player2.id;
   const opponent = loggedInPlayerId === player1.id ? player2 : player1;
 
+  // allow organizer or one of the two players to manage the booking
+  const canManageBooking = isOrganizer || isParticipant;
   const canEnterResult = isParticipant || isOrganizer;
   const canBook = isParticipant || isOrganizer;
-  const canManageBooking = isParticipant || isOrganizer;
   const canDeleteResult = isParticipant || isOrganizer;
 
   const handleEnterResult = () => onEditResult(match);
@@ -91,6 +92,7 @@ const MatchCard: React.FC<{
           </button>
         )}
 
+        {/* Modifica / Annulla pren. disponibili per organizer e per i due giocatori coinvolti */}
         {match.status === 'scheduled' && canManageBooking && onRescheduleMatch && (
           <button onClick={() => onRescheduleMatch(match)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
             Modifica pren.
@@ -156,6 +158,7 @@ const MatchList: React.FC<MatchListProps> = ({
                 </div>
             </div>
         )}
+
         <div>
             <h4 className="text-lg font-semibold mb-3 text-accent">Partite da Fare</h4>
             <div className="space-y-3">
