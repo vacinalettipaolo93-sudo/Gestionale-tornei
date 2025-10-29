@@ -9,11 +9,9 @@ interface TimeSlotsProps {
     tournament: Tournament;
     setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
     isOrganizer: boolean;
-    // NUOVI props:
     loggedInPlayerId?: string;
     selectedGroupId?: string;
     onSlotBook?: (slot: TimeSlot) => void;
-    // NUOVI: per edit/cancel dallo slot
     onRequestReschedule?: (match: Match) => void;
     onRequestCancelBooking?: (match: Match) => void;
 }
@@ -34,16 +32,11 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
         };
 
         const updatedTimeSlots = [...tournament.timeSlots, newSlot].sort((a,b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-        // Aggiorna React state
         setEvents(prev => prev.map(ev => ev.id === event.id ? {
             ...ev,
-            tournaments: ev.tournaments.map(t => t.id === tournament.id ? {
-                ...t,
-                timeSlots: updatedTimeSlots
-            } : t)
+            tournaments: ev.tournaments.map(t => t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t)
         } : ev));
 
-        // Aggiorna Firestore!
         await updateDoc(doc(db, "events", event.id), {
             tournaments: event.tournaments.map(t =>
                 t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t
@@ -74,7 +67,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
             if (match) {
                 const p1 = event.players.find(p => p.id === match.player1Id);
                 const p2 = event.players.find(p => p.id === match.player2Id);
-                // mostra anche il risultato se presente
                 if (match.score1 != null && match.score2 != null) {
                   return `${p1?.name || '?'} ${match.score1} - ${match.score2} ${p2?.name || '?'}`;
                 }
@@ -95,13 +87,12 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
       return null;
     };
 
-    // trova il girone del giocatore (se esiste)
+    // trova girone dell'utente
     const playerGroup = loggedInPlayerId ? tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId)) : undefined;
-    // Se selectedGroupId è passato, preferiamolo
     const effectiveGroup = selectedGroupId ? tournament.groups.find(g => g.id === selectedGroupId) : playerGroup;
     const isParticipantInGroup = !!(effectiveGroup && loggedInPlayerId && effectiveGroup.playerIds.includes(loggedInPlayerId));
 
-    // utilità: trova la match dato matchId
+    // trova match dall'id
     const findMatchById = (matchId?: string | null) : Match | undefined => {
         if (!matchId) return undefined;
         for (const g of tournament.groups) {
@@ -143,7 +134,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
                 <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
                     {tournament.timeSlots.length > 0 ? tournament.timeSlots.map(slot => {
                         const match = findMatchById(slot.matchId);
-                        // se la slot è occupata e l'utente è uno dei due giocatori o organizer, mostro Modifica/Annulla
                         const isParticipantOfThisMatch = !!(match && loggedInPlayerId && (match.player1Id === loggedInPlayerId || match.player2Id === loggedInPlayerId));
                         const scoreCenter = getMatchScore(slot.matchId);
                         return (
@@ -172,7 +162,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
                                     </button>
                                 )}
 
-                                {/* Se slot è occupato: mostra Modifica/Annulla solo a partecipanti della partita o organizer */}
+                                {/* Se slot è occupato: mostra Modifica pren./Annulla pren. a organizer o giocatori coinvolti */}
                                 {slot.matchId && (isOrganizer || isParticipantOfThisMatch) && match && (
                                     <>
                                         {onRequestReschedule && (
