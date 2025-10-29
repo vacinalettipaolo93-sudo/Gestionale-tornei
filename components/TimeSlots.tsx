@@ -74,6 +74,10 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
             if (match) {
                 const p1 = event.players.find(p => p.id === match.player1Id);
                 const p2 = event.players.find(p => p.id === match.player2Id);
+                // mostra anche il risultato se presente
+                if (match.score1 != null && match.score2 != null) {
+                  return `${p1?.name || '?'} ${match.score1} - ${match.score2} ${p2?.name || '?'}`;
+                }
                 return `${p1?.name || '?'} vs ${p2?.name || '?'}`;
             }
         }
