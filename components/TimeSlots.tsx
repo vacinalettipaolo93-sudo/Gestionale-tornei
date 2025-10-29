@@ -17,6 +17,7 @@ interface TimeSlotsProps {
 }
 
 const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isOrganizer, loggedInPlayerId, selectedGroupId, onSlotBook, onRequestReschedule, onRequestCancelBooking }) => {
+    // manteniamo i valori inseriti per riuso (l'amministratore vedrà gli ultimi inseriti nel form dopo "Aggiungi")
     const [newTime, setNewTime] = useState('');
     const [newLocation, setNewLocation] = useState('');
 
@@ -32,19 +33,26 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
         };
 
         const updatedTimeSlots = [...tournament.timeSlots, newSlot].sort((a,b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        // Aggiorna React state
         setEvents(prev => prev.map(ev => ev.id === event.id ? {
             ...ev,
-            tournaments: ev.tournaments.map(t => t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t)
+            tournaments: ev.tournaments.map(t => t.id === tournament.id ? {
+                ...t,
+                timeSlots: updatedTimeSlots
+            } : t)
         } : ev));
 
+        // Aggiorna Firestore!
         await updateDoc(doc(db, "events", event.id), {
             tournaments: event.tournaments.map(t =>
                 t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t
             )
         });
 
-        setNewTime('');
-        setNewLocation('');
+        // NON puliamo newTime/newLocation: lasciamo l'ultimo valore inserito così l'admin può modificare solo ciò che serve.
+        // Se preferisci svuotarli in futuro, rimettere le righe seguenti:
+        // setNewTime('');
+        // setNewLocation('');
     };
 
     const handleDeleteSlot = async (slotId: string) => {
@@ -87,6 +95,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
       return null;
     };
 
+    // trova girone dell'utente
     const playerGroup = loggedInPlayerId ? tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId)) : undefined;
     const effectiveGroup = selectedGroupId ? tournament.groups.find(g => g.id === selectedGroupId) : playerGroup;
     const isParticipantInGroup = !!(effectiveGroup && loggedInPlayerId && effectiveGroup.playerIds.includes(loggedInPlayerId));
@@ -125,6 +134,10 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
                             Aggiungi
                         </button>
                     </form>
+
+                    <p className="text-sm text-text-secondary mt-2">
+                      Nota: il sistema manterrà ultimo orario e luogo inseriti, così puoi crearne rapidamente altri simili.
+                    </p>
                 </div>
             )}
             <div className="bg-secondary p-6 rounded-xl shadow-lg">
