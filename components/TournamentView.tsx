@@ -69,6 +69,21 @@ const TournamentView: React.FC<TournamentViewProps> = ({
   // Stato per la prenotazione slot-first
   const [bookingSlot, setBookingSlot] = useState<TimeSlot | null>(null);
 
+  // Calcola il girone e le partite disponibili per la prenotazione slot-first
+  const slotBookingData = useMemo(() => {
+    if (!bookingSlot || !loggedInPlayerId) return null;
+    
+    const playerGroup = tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId));
+    const availableMatches = playerGroup
+      ? playerGroup.matches.filter(m => 
+          m.status === 'pending' && 
+          (m.player1Id === loggedInPlayerId || m.player2Id === loggedInPlayerId)
+        )
+      : [];
+
+    return { playerGroup, availableMatches };
+  }, [bookingSlot, loggedInPlayerId, tournament.groups]);
+
   // Funzione wrapper per aggiornare React state e Firestore
   const handleUpdateEvents = async (updater: (prevEvents: Event[]) => Event[]) => {
     setEvents(updater);
@@ -247,10 +262,14 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       }));
 
       setBookingSlot(null);
-      alert('Prenotazione effettuata con successo!');
     } catch (error) {
       console.error('Errore durante la prenotazione:', error);
-      alert(`Errore: ${error instanceof Error ? error.message : 'Impossibile completare la prenotazione'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Impossibile completare la prenotazione';
+      setBookingSlot(null);
+      // Show error in a better way - using the same pattern as successful booking
+      setTimeout(() => {
+        alert(`Errore: ${errorMessage}`);
+      }, 100);
     }
   };
 
@@ -627,80 +646,65 @@ const TournamentView: React.FC<TournamentViewProps> = ({
         </div>
       )}
 
-      {bookingSlot && (() => {
-        // Trova il girone del giocatore
-        const playerGroup = loggedInPlayerId 
-          ? tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId))
-          : null;
+      {bookingSlot && slotBookingData && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Prenota Partita per lo Slot</h4>
+            <div className="bg-primary/50 p-3 rounded-lg mb-4">
+              <p className="text-sm text-text-secondary mb-1">Slot selezionato:</p>
+              <p className="font-semibold">
+                {new Date(bookingSlot.time).toLocaleString('it-IT', {
+                  dateStyle: 'full',
+                  timeStyle: 'short',
+                })}
+              </p>
+              <p className="text-sm text-accent">{bookingSlot.location}</p>
+            </div>
 
-        // Trova le partite pending del giocatore nel suo girone
-        const availableMatches = playerGroup
-          ? playerGroup.matches.filter(m => 
-              m.status === 'pending' && 
-              (m.player1Id === loggedInPlayerId || m.player2Id === loggedInPlayerId)
-            )
-          : [];
-
-        return (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
-            <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
-              <h4 className="text-lg font-bold mb-4">Prenota Partita per lo Slot</h4>
-              <div className="bg-primary/50 p-3 rounded-lg mb-4">
-                <p className="text-sm text-text-secondary mb-1">Slot selezionato:</p>
-                <p className="font-semibold">
-                  {new Date(bookingSlot.time).toLocaleString('it-IT', {
-                    dateStyle: 'full',
-                    timeStyle: 'short',
+            {!slotBookingData.playerGroup ? (
+              <p className="text-text-secondary text-center py-4">
+                Non sei iscritto a nessun girone.
+              </p>
+            ) : slotBookingData.availableMatches.length === 0 ? (
+              <p className="text-text-secondary text-center py-4">
+                Non hai partite in attesa di prenotazione nel girone "{slotBookingData.playerGroup.name}".
+              </p>
+            ) : (
+              <>
+                <p className="mb-3 text-text-secondary text-sm">
+                  Seleziona una delle tue partite in attesa:
+                </p>
+                <div className="max-h-60 overflow-y-auto space-y-2">
+                  {slotBookingData.availableMatches.map(match => {
+                    const player1 = event.players.find(p => p.id === match.player1Id);
+                    const player2 = event.players.find(p => p.id === match.player2Id);
+                    return (
+                      <button
+                        key={match.id}
+                        onClick={() => handleBookMatchWithSlot(match.id)}
+                        className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg transition-colors"
+                      >
+                        <p className="font-semibold">
+                          {player1?.name || '?'} vs {player2?.name || '?'}
+                        </p>
+                      </button>
+                    );
                   })}
-                </p>
-                <p className="text-sm text-accent">{bookingSlot.location}</p>
-              </div>
+                </div>
+              </>
+            )}
 
-              {!playerGroup ? (
-                <p className="text-text-secondary text-center py-4">
-                  Non sei iscritto a nessun girone.
-                </p>
-              ) : availableMatches.length === 0 ? (
-                <p className="text-text-secondary text-center py-4">
-                  Non hai partite in attesa di prenotazione nel girone "{playerGroup.name}".
-                </p>
-              ) : (
-                <>
-                  <p className="mb-3 text-text-secondary text-sm">
-                    Seleziona una delle tue partite in attesa:
-                  </p>
-                  <div className="max-h-60 overflow-y-auto space-y-2">
-                    {availableMatches.map(match => {
-                      const player1 = event.players.find(p => p.id === match.player1Id);
-                      const player2 = event.players.find(p => p.id === match.player2Id);
-                      return (
-                        <button
-                          key={match.id}
-                          onClick={() => handleBookMatchWithSlot(match.id)}
-                          className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg transition-colors"
-                        >
-                          <p className="font-semibold">
-                            {player1?.name || '?'} vs {player2?.name || '?'}
-                          </p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-
-              <div className="flex justify-end mt-6">
-                <button
-                  onClick={() => setBookingSlot(null)}
-                  className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors"
-                >
-                  Annulla
-                </button>
-              </div>
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setBookingSlot(null)}
+                className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors"
+              >
+                Annulla
+              </button>
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
     </div>
   );
 };
