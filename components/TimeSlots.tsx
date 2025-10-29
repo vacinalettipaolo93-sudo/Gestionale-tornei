@@ -87,12 +87,10 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
       return null;
     };
 
-    // trova girone dell'utente
     const playerGroup = loggedInPlayerId ? tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId)) : undefined;
     const effectiveGroup = selectedGroupId ? tournament.groups.find(g => g.id === selectedGroupId) : playerGroup;
     const isParticipantInGroup = !!(effectiveGroup && loggedInPlayerId && effectiveGroup.playerIds.includes(loggedInPlayerId));
 
-    // trova match dall'id
     const findMatchById = (matchId?: string | null) : Match | undefined => {
         if (!matchId) return undefined;
         for (const g of tournament.groups) {
@@ -143,7 +141,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
                               <p className="text-sm text-text-secondary text-center">{slot.location}</p>
                             </div>
 
-                            {/* Centro: risultato (se presente) o nome partita */}
                             <div className="flex items-center justify-center mb-2">
                               {scoreCenter ? (
                                 <div className="text-2xl font-bold text-center">{scoreCenter}</div>
@@ -155,14 +152,12 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
                             </div>
 
                             <div className="flex items-center justify-center gap-3">
-                                {/* Prenota per partecipanti (slot libero) */}
                                 {!slot.matchId && onSlotBook && isParticipantInGroup && (
                                     <button onClick={() => onSlotBook(slot)} className="bg-accent/80 hover:bg-accent text-primary font-bold py-2 px-3 rounded-lg text-sm transition-colors">
                                         Prenota
                                     </button>
                                 )}
 
-                                {/* Se slot è occupato: mostra Modifica pren./Annulla pren. a organizer o giocatori coinvolti */}
                                 {slot.matchId && (isOrganizer || isParticipantOfThisMatch) && match && (
                                     <>
                                         {onRequestReschedule && (
