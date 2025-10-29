@@ -11,7 +11,7 @@ import Playoffs from './Playoffs';
 import ConsolationBracket from './ConsolationBracket';
 import { PlusIcon } from './Icons';
 import { db } from "../firebase";
-import { updateDoc, doc } from "firebase/firestore";
+import { updateDoc, doc, runTransaction } from "firebase/firestore";
 
 interface TournamentViewProps {
   event: Event;
@@ -65,6 +65,9 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
   // Stato per la partita da riprenotare (cambia slot)
   const [rescheduleMatch, setRescheduleMatch] = useState<Match | null>(null);
+
+  // Stato per la prenotazione slot-first
+  const [bookingSlot, setBookingSlot] = useState<TimeSlot | null>(null);
 
   // Funzione wrapper per aggiornare React state e Firestore
   const handleUpdateEvents = async (updater: (prevEvents: Event[]) => Event[]) => {
@@ -139,6 +142,116 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       };
     }));
     setRescheduleMatch(null);
+  };
+
+  // Apertura modal per prenotazione slot-first
+  const handleSlotInitiatedBooking = (slot: TimeSlot) => {
+    setBookingSlot(slot);
+  };
+
+  // Prenotazione slot-first con transazione Firestore atomica
+  const handleBookMatchWithSlot = async (matchId: string) => {
+    if (!bookingSlot) return;
+    
+    const slotId = bookingSlot.id;
+    const slotTime = bookingSlot.time;
+    const slotLocation = bookingSlot.location;
+
+    try {
+      const eventRef = doc(db, "events", event.id);
+      
+      await runTransaction(db, async (transaction) => {
+        const eventDoc = await transaction.get(eventRef);
+        
+        if (!eventDoc.exists()) {
+          throw new Error("Evento non trovato");
+        }
+
+        const eventData = eventDoc.data() as Event;
+        const currentTournament = eventData.tournaments.find(t => t.id === tournament.id);
+        
+        if (!currentTournament) {
+          throw new Error("Torneo non trovato");
+        }
+
+        // Verifica che lo slot sia ancora libero
+        const currentSlot = currentTournament.timeSlots.find(ts => ts.id === slotId);
+        if (!currentSlot || currentSlot.matchId !== null) {
+          throw new Error("Lo slot è già stato prenotato da un altro utente");
+        }
+
+        // Verifica che la partita sia ancora pending
+        let matchFound = false;
+        let matchGroupId = '';
+        for (const group of currentTournament.groups) {
+          const match = group.matches.find(m => m.id === matchId);
+          if (match) {
+            if (match.status !== 'pending') {
+              throw new Error("La partita non è più disponibile per la prenotazione");
+            }
+            matchFound = true;
+            matchGroupId = group.id;
+            break;
+          }
+        }
+
+        if (!matchFound) {
+          throw new Error("Partita non trovata");
+        }
+
+        // Aggiorna atomicamente slot e match
+        const updatedTournaments = eventData.tournaments.map(t => {
+          if (t.id !== tournament.id) return t;
+          return {
+            ...t,
+            timeSlots: t.timeSlots.map(ts =>
+              ts.id === slotId ? { ...ts, matchId } : ts
+            ),
+            groups: t.groups.map(g => ({
+              ...g,
+              matches: g.matches.map(m =>
+                m.id === matchId
+                  ? { ...m, status: 'scheduled' as const, scheduledTime: slotTime, location: slotLocation }
+                  : m
+              ),
+            })),
+          };
+        });
+
+        transaction.update(eventRef, { tournaments: updatedTournaments });
+      });
+
+      // Aggiorna lo stato React locale dopo il successo della transazione
+      setEvents(prev => prev.map(e => {
+        if (e.id !== event.id) return e;
+        return {
+          ...e,
+          tournaments: e.tournaments.map(t => {
+            if (t.id !== tournament.id) return t;
+            return {
+              ...t,
+              timeSlots: t.timeSlots.map(ts =>
+                ts.id === slotId ? { ...ts, matchId } : ts
+              ),
+              groups: t.groups.map(g => ({
+                ...g,
+                matches: g.matches.map(m =>
+                  m.id === matchId
+                    ? { ...m, status: 'scheduled', scheduledTime: slotTime, location: slotLocation }
+                    : m
+                ),
+              })),
+            };
+          }),
+        };
+      }));
+
+      setBookingSlot(null);
+      alert('Prenotazione effettuata con successo!');
+    } catch (error) {
+      console.error('Errore durante la prenotazione:', error);
+      alert(`Errore: ${error instanceof Error ? error.message : 'Impossibile completare la prenotazione'}`);
+    }
   };
 
   // Modifica risultato partita
@@ -311,7 +424,15 @@ const TournamentView: React.FC<TournamentViewProps> = ({
           />
         )}
         {activeTab === 'timeSlots' && (
-          <TimeSlots event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} />
+          <TimeSlots 
+            event={event} 
+            tournament={tournament} 
+            setEvents={setEvents} 
+            isOrganizer={isOrganizer}
+            loggedInPlayerId={loggedInPlayerId}
+            selectedGroupId={selectedGroupId}
+            onSlotBook={handleSlotInitiatedBooking}
+          />
         )}
         {activeTab === 'chat' && <ChatPanel />}
         {activeTab === 'groupManagement' && isOrganizer && (
@@ -505,6 +626,81 @@ const TournamentView: React.FC<TournamentViewProps> = ({
           </div>
         </div>
       )}
+
+      {bookingSlot && (() => {
+        // Trova il girone del giocatore
+        const playerGroup = loggedInPlayerId 
+          ? tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId))
+          : null;
+
+        // Trova le partite pending del giocatore nel suo girone
+        const availableMatches = playerGroup
+          ? playerGroup.matches.filter(m => 
+              m.status === 'pending' && 
+              (m.player1Id === loggedInPlayerId || m.player2Id === loggedInPlayerId)
+            )
+          : [];
+
+        return (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
+            <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+              <h4 className="text-lg font-bold mb-4">Prenota Partita per lo Slot</h4>
+              <div className="bg-primary/50 p-3 rounded-lg mb-4">
+                <p className="text-sm text-text-secondary mb-1">Slot selezionato:</p>
+                <p className="font-semibold">
+                  {new Date(bookingSlot.time).toLocaleString('it-IT', {
+                    dateStyle: 'full',
+                    timeStyle: 'short',
+                  })}
+                </p>
+                <p className="text-sm text-accent">{bookingSlot.location}</p>
+              </div>
+
+              {!playerGroup ? (
+                <p className="text-text-secondary text-center py-4">
+                  Non sei iscritto a nessun girone.
+                </p>
+              ) : availableMatches.length === 0 ? (
+                <p className="text-text-secondary text-center py-4">
+                  Non hai partite in attesa di prenotazione nel girone "{playerGroup.name}".
+                </p>
+              ) : (
+                <>
+                  <p className="mb-3 text-text-secondary text-sm">
+                    Seleziona una delle tue partite in attesa:
+                  </p>
+                  <div className="max-h-60 overflow-y-auto space-y-2">
+                    {availableMatches.map(match => {
+                      const player1 = event.players.find(p => p.id === match.player1Id);
+                      const player2 = event.players.find(p => p.id === match.player2Id);
+                      return (
+                        <button
+                          key={match.id}
+                          onClick={() => handleBookMatchWithSlot(match.id)}
+                          className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg transition-colors"
+                        >
+                          <p className="font-semibold">
+                            {player1?.name || '?'} vs {player2?.name || '?'}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-end mt-6">
+                <button
+                  onClick={() => setBookingSlot(null)}
+                  className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors"
+                >
+                  Annulla
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

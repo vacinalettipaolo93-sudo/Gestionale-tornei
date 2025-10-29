@@ -9,9 +9,12 @@ interface TimeSlotsProps {
     tournament: Tournament;
     setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
     isOrganizer: boolean;
+    loggedInPlayerId?: string;
+    selectedGroupId?: string;
+    onSlotBook?: (slot: TimeSlot) => void;
 }
 
-const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isOrganizer }) => {
+const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isOrganizer, loggedInPlayerId, selectedGroupId, onSlotBook }) => {
     const [newTime, setNewTime] = useState('');
     const [newLocation, setNewLocation] = useState('');
 
@@ -130,11 +133,21 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
                                 <p className="font-semibold">{new Date(slot.time).toLocaleString('it-IT', { dateStyle: 'long', timeStyle: 'short' })} - {slot.location}</p>
                                 <p className={`text-sm ${slot.matchId ? 'text-text-secondary' : 'text-green-400'}`}>{slot.matchId ? `Occupato da: ${getMatchPlayers(slot.matchId)}` : 'Libero'}</p>
                             </div>
-                            {isOrganizer && (
-                                <button onClick={() => handleDeleteSlot(slot.id)} className="text-text-secondary/50 hover:text-red-500 transition-colors">
-                                    <TrashIcon className="w-5 h-5"/>
-                                </button>
-                            )}
+                            <div className="flex gap-2 items-center">
+                                {!isOrganizer && !slot.matchId && loggedInPlayerId && onSlotBook && (
+                                    <button 
+                                        onClick={() => onSlotBook(slot)} 
+                                        className="bg-accent hover:bg-accent/80 text-primary font-bold py-2 px-4 rounded-lg text-sm transition-colors"
+                                    >
+                                        Prenota
+                                    </button>
+                                )}
+                                {isOrganizer && (
+                                    <button onClick={() => handleDeleteSlot(slot.id)} className="text-text-secondary/50 hover:text-red-500 transition-colors">
+                                        <TrashIcon className="w-5 h-5"/>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     )) : <p className="text-text-secondary text-center py-4">Nessuno slot orario creato.</p>}
                 </div>
