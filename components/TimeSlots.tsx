@@ -14,9 +14,11 @@ interface TimeSlotsProps {
     onSlotBook?: (slot: TimeSlot) => void;
     onRequestReschedule?: (match: Match) => void;
     onRequestCancelBooking?: (match: Match) => void;
+    viewingOwnGroup?: boolean; // true se l'utente sta guardando il proprio girone
 }
 
-const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isOrganizer, loggedInPlayerId, selectedGroupId, onSlotBook, onRequestReschedule, onRequestCancelBooking }) => {
+const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isOrganizer, loggedInPlayerId, selectedGroupId, onSlotBook, onRequestReschedule, onRequestCancelBooking, viewingOwnGroup }) => {
+    // manteniamo i valori inseriti per riuso (l'amministratore vedrà gli ultimi inseriti nel form dopo "Aggiungi")
     const [newTime, setNewTime] = useState('');
     const [newLocation, setNewLocation] = useState('');
 
@@ -43,8 +45,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
             )
         });
 
-        setNewTime('');
-        setNewLocation('');
+        // do NOT clear inputs: admin wants them preserved for faster additions
     };
 
     const handleDeleteSlot = async (slotId: string) => {
@@ -92,7 +93,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
     const effectiveGroup = selectedGroupId ? tournament.groups.find(g => g.id === selectedGroupId) : playerGroup;
     const isParticipantInGroup = !!(effectiveGroup && loggedInPlayerId && effectiveGroup.playerIds.includes(loggedInPlayerId));
 
-    // trova match dall'id
     const findMatchById = (matchId?: string | null) : Match | undefined => {
         if (!matchId) return undefined;
         for (const g of tournament.groups) {
@@ -127,6 +127,10 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
                             Aggiungi
                         </button>
                     </form>
+
+                    <p className="text-sm text-text-secondary mt-2">
+                      Nota: il sistema manterrà l'ultimo orario e luogo inseriti, così puoi crearne rapidamente altri simili.
+                    </p>
                 </div>
             )}
             <div className="bg-secondary p-6 rounded-xl shadow-lg">
@@ -135,6 +139,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
                     {tournament.timeSlots.length > 0 ? tournament.timeSlots.map(slot => {
                         const match = findMatchById(slot.matchId);
                         const isParticipantOfThisMatch = !!(match && loggedInPlayerId && (match.player1Id === loggedInPlayerId || match.player2Id === loggedInPlayerId));
+                        const canManageThisSlot = isOrganizer || (isParticipantOfThisMatch && !!viewingOwnGroup);
                         const scoreCenter = getMatchScore(slot.matchId);
                         return (
                         <div key={slot.id} className={`p-3 rounded-lg flex flex-col justify-between items-stretch ${slot.matchId ? 'bg-primary/50' : 'bg-green-500/10 border border-green-500/30'}`}>
@@ -154,13 +159,13 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
                             </div>
 
                             <div className="flex items-center justify-center gap-3">
-                                {!slot.matchId && onSlotBook && isParticipantInGroup && (
+                                {!slot.matchId && onSlotBook && isParticipantInGroup && viewingOwnGroup && (
                                     <button onClick={() => onSlotBook(slot)} className="bg-accent/80 hover:bg-accent text-primary font-bold py-2 px-3 rounded-lg text-sm transition-colors">
                                         Prenota
                                     </button>
                                 )}
 
-                                {slot.matchId && (isOrganizer || isParticipantOfThisMatch) && match && (
+                                {slot.matchId && canManageThisSlot && match && (
                                     <>
                                         {onRequestReschedule && (
                                             <button onClick={() => onRequestReschedule(match)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
