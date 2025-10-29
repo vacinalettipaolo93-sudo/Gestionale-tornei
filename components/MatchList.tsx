@@ -45,6 +45,18 @@ const MatchCard: React.FC<{
      onEditResult(match);
   }
 
+  // Show result string when present
+  const renderResult = () => {
+    if (match.score1 != null && match.score2 != null) {
+      return (
+        <div className="text-xl font-bold">
+          {match.score1} — {match.score2}
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="bg-secondary p-4 rounded-lg shadow">
       <div className="flex items-center justify-between">
@@ -56,7 +68,10 @@ const MatchCard: React.FC<{
           </div>
         </div>
         <div className="text-right">
-          {match.status === 'scheduled' && match.scheduledTime ? (
+          {/* If match has result show it; else if scheduled show date/time/location; else show 'vs' */}
+          {match.score1 != null && match.score2 != null ? (
+            renderResult()
+          ) : match.status === 'scheduled' && match.scheduledTime ? (
             <>
               <div>{new Date(match.scheduledTime).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })} alle {new Date(match.scheduledTime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</div>
               {match.location && <div className="font-semibold">{match.location}</div>}
@@ -100,7 +115,7 @@ const MatchCard: React.FC<{
         )}
 
         {/* Se match è completed: mostra pulsante per eliminare risultato */}
-        {match.status === 'completed' && canDeleteResult && onDeleteResult && (
+        {match.score1 != null && match.score2 != null && canDeleteResult && onDeleteResult && (
           <button
             onClick={() => onDeleteResult(match)}
             className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors"
@@ -144,7 +159,7 @@ const MatchList: React.FC<MatchListProps> = ({
 
   const pendingMatches = filteredMatches('pending');
   const scheduledMatches = filteredMatches('scheduled');
-  const completedMatches = filteredMatches('completed');
+  const completedMatches = group.matches.filter(m => m.score1 != null && m.score2 != null);
 
   return (
     <div className="space-y-6">
