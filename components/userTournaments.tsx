@@ -34,12 +34,23 @@ const UserTournaments: React.FC<Props> = ({ events, loggedInPlayerId, onOpenTour
       {myTournaments.map(({ event, tournament, myGroupId }) => (
         <div key={`${event.id}-${tournament.id}`} className="bg-secondary p-3 rounded-lg flex items-center justify-between">
           <div>
-            <div className="font-semibold">
-              {tournament.name} <span className="text-sm text-text-secondary">({event.name})</span>
-              {myGroupId && <span className="ml-3 inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded">Tuo torneo</span>}
+            <div className="flex items-center gap-3">
+              <div className="font-semibold">{tournament.name} <span className="text-sm text-text-secondary">({event.name})</span></div>
+              {myGroupId && (
+                <span className="ml-2 inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded">
+                  Tuo torneo
+                </span>
+              )}
             </div>
-            {myGroupId ? <div className="text-sm text-text-secondary">Il tuo girone: <strong>{tournament.groups.find(g => g.id === myGroupId)?.name ?? '-'}</strong></div> : null}
+
+            {myGroupId ? (
+              <div className="text-sm text-text-secondary mt-1">
+                Il tuo girone: <strong>{tournament.groups.find(g => g.id === myGroupId)?.name ?? '-'}</strong>
+                <span className="ml-2 inline-block bg-blue-50 text-blue-800 text-xs font-medium px-2 py-0.5 rounded">Tuo girone</span>
+              </div>
+            ) : null}
           </div>
+
           <div className="flex gap-2">
             <button onClick={() => onOpenTournament(event, tournament, myGroupId)} className="bg-highlight text-white py-1 px-3 rounded">Entra</button>
             <button onClick={() => onOpenTournament(event, tournament, undefined)} className="bg-tertiary text-text-primary py-1 px-3 rounded">Vedi tutti (risultati)</button>
