@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { type Event, type Tournament, type TimeSlot } from '../types';
+import { type Event, type Tournament, type TimeSlot, type Match } from '../types';
 import { TrashIcon } from './Icons';
 import { db } from "../firebase";
 import { updateDoc, doc } from "firebase/firestore";
@@ -13,9 +13,12 @@ interface TimeSlotsProps {
     loggedInPlayerId?: string;
     selectedGroupId?: string;
     onSlotBook?: (slot: TimeSlot) => void;
+    // NUOVI: per edit/cancel dallo slot
+    onRequestReschedule?: (match: Match) => void;
+    onRequestCancelBooking?: (match: Match) => void;
 }
 
-const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isOrganizer, loggedInPlayerId, selectedGroupId, onSlotBook }) => {
+const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isOrganizer, loggedInPlayerId, selectedGroupId, onSlotBook, onRequestReschedule, onRequestCancelBooking }) => {
     const [newTime, setNewTime] = useState('');
     const [newLocation, setNewLocation] = useState('');
 
@@ -83,6 +86,16 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
     const effectiveGroup = selectedGroupId ? tournament.groups.find(g => g.id === selectedGroupId) : playerGroup;
     const isParticipantInGroup = !!(effectiveGroup && loggedInPlayerId && effectiveGroup.playerIds.includes(loggedInPlayerId));
 
+    // utilità: trova la match dato matchId
+    const findMatchById = (matchId?: string | null) : Match | undefined => {
+        if (!matchId) return undefined;
+        for (const g of tournament.groups) {
+            const m = g.matches.find(x => x.id === matchId);
+            if (m) return m;
+        }
+        return undefined;
+    };
+
     return (
         <div className="space-y-6">
             {isOrganizer && (
@@ -113,19 +126,40 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
             <div className="bg-secondary p-6 rounded-xl shadow-lg">
                 <h3 className="text-xl font-bold mb-4 text-accent">Slot Disponibili</h3>
                 <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                    {tournament.timeSlots.length > 0 ? tournament.timeSlots.map(slot => (
+                    {tournament.timeSlots.length > 0 ? tournament.timeSlots.map(slot => {
+                        const match = findMatchById(slot.matchId);
+                        // se la slot è occupata e l'utente è uno dei due giocatori o organizer, mostro Modifica/Annulla
+                        const isParticipantOfThisMatch = !!(match && loggedInPlayerId && (match.player1Id === loggedInPlayerId || match.player2Id === loggedInPlayerId));
+                        return (
                         <div key={slot.id} className={`p-3 rounded-lg flex justify-between items-center ${slot.matchId ? 'bg-primary/50' : 'bg-green-500/10 border border-green-500/30'}`}>
                             <div>
                                 <p className="font-semibold">{new Date(slot.time).toLocaleString('it-IT', { dateStyle: 'long', timeStyle: 'short' })} - {slot.location}</p>
                                 <p className={`text-sm ${slot.matchId ? 'text-text-secondary' : 'text-green-400'}`}>{slot.matchId ? `Occupato da: ${getMatchPlayers(slot.matchId)}` : 'Libero'}</p>
                             </div>
                             <div className="flex items-center gap-3">
-                                {/* Pulsante Prenota SOLO se è libero, l'utente è partecipante del girone e onSlotBook è fornito */}
+                                {/* Prenota per partecipanti (slot libero) */}
                                 {!slot.matchId && onSlotBook && isParticipantInGroup && (
                                     <button onClick={() => onSlotBook(slot)} className="bg-accent/80 hover:bg-accent text-primary font-bold py-2 px-3 rounded-lg text-sm transition-colors">
                                         Prenota
                                     </button>
                                 )}
+
+                                {/* Se slot è occupato: mostra Modifica/Annulla solo a partecipanti della partita o organizer */}
+                                {slot.matchId && (isOrganizer || isParticipantOfThisMatch) && match && (
+                                    <>
+                                        {onRequestReschedule && (
+                                            <button onClick={() => onRequestReschedule(match)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
+                                                Modifica
+                                            </button>
+                                        )}
+                                        {onRequestCancelBooking && (
+                                            <button onClick={() => onRequestCancelBooking(match)} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
+                                                Annulla
+                                            </button>
+                                        )}
+                                    </>
+                                )}
+
                                 {isOrganizer && (
                                     <button onClick={() => handleDeleteSlot(slot.id)} className="text-text-secondary/50 hover:text-red-500 transition-colors">
                                         <TrashIcon className="w-5 h-5"/>
@@ -133,7 +167,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
                                 )}
                             </div>
                         </div>
-                    )) : <p className="text-text-secondary text-center py-4">Nessuno slot orario creato.</p>}
+                    )}) : <p className="text-text-secondary text-center py-4">Nessuno slot orario creato.</p>}
                 </div>
             </div>
         </div>
