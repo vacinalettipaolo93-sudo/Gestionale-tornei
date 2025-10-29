@@ -160,20 +160,7 @@ const MatchList: React.FC<MatchListProps> = ({
             <h4 className="text-lg font-semibold mb-3 text-accent">Partite da Fare</h4>
             <div className="space-y-3">
                 {pendingMatches.length > 0 ? pendingMatches.map(match => (
-                    <MatchCard
-                      key={match.id}
-                      match={match}
-                      player1={getPlayer(match.player1Id)}
-                      player2={getPlayer(match.player2Id)}
-                      onEditResult={onEditResult}
-                      onBookMatch={onBookMatch}
-                      isOrganizer={isOrganizer}
-                      loggedInPlayerId={loggedInPlayerId}
-                      onPlayerContact={onPlayerContact}
-                      onRescheduleMatch={onRescheduleMatch}
-                      onCancelBooking={onCancelBooking}
-                      onDeleteResult={onDeleteResult}
-                    />
+                    <MatchCard key={match.id} match={match} player1={getPlayer(match.player1Id)} player2={getPlayer(match.player2Id)} onEditResult={onEditResult} onBookMatch={onBookMatch} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact} onRescheduleMatch={onRescheduleMatch} onCancelBooking={onCancelBooking} onDeleteResult={onDeleteResult} />
                 )) : <p className="text-text-secondary text-center py-4">Nessuna partita da disputare.</p>}
             </div>
         </div>
@@ -182,20 +169,7 @@ const MatchList: React.FC<MatchListProps> = ({
             <h4 className="text-lg font-semibold mb-3 text-accent">Partite Programmate</h4>
             <div className="space-y-3">
                 {scheduledMatches.length > 0 ? scheduledMatches.map(match => (
-                    <MatchCard
-                      key={match.id}
-                      match={match}
-                      player1={getPlayer(match.player1Id)}
-                      player2={getPlayer(match.player2Id)}
-                      onEditResult={onEditResult}
-                      onBookMatch={onBookMatch}
-                      isOrganizer={isOrganizer}
-                      loggedInPlayerId={loggedInPlayerId}
-                      onPlayerContact={onPlayerContact}
-                      onRescheduleMatch={onRescheduleMatch}
-                      onCancelBooking={onCancelBooking}
-                      onDeleteResult={onDeleteResult}
-                    />
+                    <MatchCard key={match.id} match={match} player1={getPlayer(match.player1Id)} player2={getPlayer(match.player2Id)} onEditResult={onEditResult} onBookMatch={onBookMatch} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact} onRescheduleMatch={onRescheduleMatch} onCancelBooking={onCancelBooking} onDeleteResult={onDeleteResult} />
                 )) : <p className="text-text-secondary text-center py-4">Nessuna partita programmata.</p>}
             </div>
         </div>
@@ -204,20 +178,7 @@ const MatchList: React.FC<MatchListProps> = ({
             <h4 className="text-lg font-semibold mb-3 text-accent">Partite Completate</h4>
             <div className="space-y-3">
                 {completedMatches.length > 0 ? completedMatches.map(match => (
-                    <MatchCard
-                      key={match.id}
-                      match={match}
-                      player1={getPlayer(match.player1Id)}
-                      player2={getPlayer(match.player2Id)}
-                      onEditResult={onEditResult}
-                      onBookMatch={onBookMatch}
-                      isOrganizer={isOrganizer}
-                      loggedInPlayerId={loggedInPlayerId}
-                      onPlayerContact={onPlayerContact}
-                      onRescheduleMatch={onRescheduleMatch}
-                      onCancelBooking={onCancelBooking}
-                      onDeleteResult={onDeleteResult}
-                    />
+                    <MatchCard key={match.id} match={match} player1={getPlayer(match.player1Id)} player2={getPlayer(match.player2Id)} onEditResult={onEditResult} onBookMatch={onBookMatch} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact} onRescheduleMatch={onRescheduleMatch} onCancelBooking={onCancelBooking} onDeleteResult={onDeleteResult} />
                 )) : <p className="text-text-secondary text-center py-4">Nessuna partita completata.</p>}
             </div>
         </div>
