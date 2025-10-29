@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { type Event, type Tournament, type Match, type TimeSlot, type Group, type Player } from '../types';
+import { type Event, type Tournament, type Match, type TimeSlot, type Player } from '../types';
 import { updateDoc, doc, runTransaction } from "firebase/firestore";
 import { db } from "../firebase";
 import MatchList from './MatchList';
@@ -12,11 +12,11 @@ import TournamentSettings from './TournamentSettings';
 import Playoffs from './Playoffs';
 import ConsolationBracket from './ConsolationBracket';
 
-// Questo file ripristina il rendering originale e aggiunge:
-// - slot-first booking (bookingSlot + runTransaction nella prenotazione)
-// - reschedule via slot (handleRescheduleBookMatch con runTransaction)
-// - cancellazione prenotazione (handleCancelBooking con runTransaction)
-// - cancellazione/modifica risultato (handleDeleteResult)
+// TournamentView: mantiene il comportamento originale e aggiunge:
+// - prenotazione "slot-first" (bookingSlot + runTransaction)
+// - reschedule (spostamento) da match o da slot (runTransaction)
+// - annullamento prenotazione (runTransaction)
+// - cancellazione / modifica risultato (runTransaction per cancellazione, updateDoc per modifica esistente)
 
 const TournamentView: React.FC<{
   event: Event;
@@ -26,7 +26,7 @@ const TournamentView: React.FC<{
   loggedInPlayerId?: string;
   onPlayerContact: (p: Player) => void;
 }> = ({ event, tournament, setEvents, isOrganizer, loggedInPlayerId, onPlayerContact }) => {
-  const [activeTab, setActiveTab] = useState<'standings'|'matches'|'players'|'timeSlots'|'chat'|'groupManagement'|'settings'|'playoffs'|'consolation' >('standings');
+  const [activeTab, setActiveTab] = useState<'standings'|'matches'|'players'|'timeSlots'|'chat'|'groupManagement'|'settings'|'playoffs'|'consolation'>('standings');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(tournament.groups.length > 0 ? tournament.groups[0].id : null);
 
   const [bookingMatch, setBookingMatch] = useState<Match | null>(null);
@@ -42,6 +42,7 @@ const TournamentView: React.FC<{
 
   const selectedGroup = selectedGroupId ? tournament.groups.find(g => g.id === selectedGroupId) ?? null : null;
 
+  // wrapper esistente per aggiornare React state e Firestore
   const handleUpdateEvents = async (updater: (prevEvents: Event[]) => Event[]) => {
     setEvents(updater);
     const updatedEvents = updater([event]);
@@ -51,7 +52,7 @@ const TournamentView: React.FC<{
     }
   };
 
-  // Flow esistente: prenotazione match -> scegli slot
+  // Flow originario: prenota partita scegliendo lo slot
   const handleBookMatch = async (timeSlot: TimeSlot) => {
     if (!bookingMatch) return;
     const matchToBookId = bookingMatch.id;
@@ -82,14 +83,14 @@ const TournamentView: React.FC<{
     setBookingMatch(null);
   };
 
-  // --- NUOVO: quando l'utente clicca "Prenota" su uno slot (slot-first) ---
+  // --- SLOT-FIRST: utente ha cliccato "Prenota" su uno slot, ora sceglie la sua partita del girone ---
   const handleSlotInitiatedBooking = (slot: TimeSlot) => {
     setBookingSlot(slot);
     setBookingMatch(null);
     setBookingError(null);
   };
 
-  // Prenota match in uno slot con transazione (slot-first)
+  // Prenota con transazione (slot-first) per garantire atomicità
   const handleBookMatchWithSlot = async (matchToBook: Match) => {
     if (!bookingSlot) return;
     setBookingLoading(true);
@@ -107,10 +108,12 @@ const TournamentView: React.FC<{
 
         const tSnapshot = currentEvent.tournaments[tIndex];
 
+        // verifica slot ancora libero
         const slotIndex = tSnapshot.timeSlots.findIndex(ts => ts.id === bookingSlot.id);
         if (slotIndex === -1) throw new Error("Slot non trovato");
         if (tSnapshot.timeSlots[slotIndex].matchId) throw new Error("Slot già prenotato");
 
+        // trova girone del giocatore oppure usa selectedGroupId
         const groupIndex = tSnapshot.groups.findIndex(g =>
           (selectedGroupId && g.id === selectedGroupId) || (loggedInPlayerId ? g.playerIds.includes(loggedInPlayerId) : false)
         );
@@ -120,6 +123,7 @@ const TournamentView: React.FC<{
         if (matchIndex === -1) throw new Error("Partita non trovata nel girone");
         if (tSnapshot.groups[groupIndex].matches[matchIndex].status !== 'pending') throw new Error("La partita non è più disponibile");
 
+        // applica modifiche in copia profonda
         const updatedEvent = JSON.parse(JSON.stringify(currentEvent)) as Event;
         const tObj = updatedEvent.tournaments.find(tt => tt.id === tournament.id)!;
         const slotToUpdate = tObj.timeSlots.find(ts => ts.id === bookingSlot.id)!;
@@ -134,7 +138,7 @@ const TournamentView: React.FC<{
         transaction.update(docRef, updatedEvent);
       });
 
-      // aggiorna UI locale
+      // aggiorna stato locale
       await handleUpdateEvents(prevEvents => prevEvents.map(e => {
         if (e.id !== event.id) return e;
         return {
@@ -168,7 +172,7 @@ const TournamentView: React.FC<{
     }
   };
 
-  // --- RESCHEDULE: spostare una partita già prenotata in un altro slot (usata da MatchList o TimeSlots) ---
+  // --- RESCHEDULE: spostare una partita già prenotata in un altro slot ---
   const handleRescheduleBookMatch = async (newSlot: TimeSlot) => {
     if (!rescheduleMatch) return;
     setBookingLoading(true);
@@ -186,31 +190,26 @@ const TournamentView: React.FC<{
 
         const tSnapshot = currentEvent.tournaments[tIndex];
 
-        // trova prevSlot (se esiste)
         const prevSlotIndex = tSnapshot.timeSlots.findIndex(ts => ts.matchId === rescheduleMatch.id);
         const newSlotIndex = tSnapshot.timeSlots.findIndex(ts => ts.id === newSlot.id);
         if (newSlotIndex === -1) throw new Error("Slot nuovo non trovato");
 
-        // consentiamo newSlot se è libero oppure già collegato alla stessa partita (caso ri-selezione)
         const newSlotMatchId = tSnapshot.timeSlots[newSlotIndex].matchId;
         if (newSlotMatchId && newSlotMatchId !== rescheduleMatch.id) throw new Error("Il nuovo slot è già occupato");
 
-        // Applichiamo le modifiche sulla copia
+        // applica su copia
         const updatedEvent = JSON.parse(JSON.stringify(currentEvent)) as Event;
         const tObj = updatedEvent.tournaments.find(tt => tt.id === tournament.id)!;
 
-        // libera prev slot
         if (prevSlotIndex !== -1) {
           const prevSlotId = tSnapshot.timeSlots[prevSlotIndex].id;
           const prevSlotObj = tObj.timeSlots.find(ts => ts.id === prevSlotId);
           if (prevSlotObj) prevSlotObj.matchId = null;
         }
 
-        // assegna nuovo slot
         const newSlotObj = tObj.timeSlots.find(ts => ts.id === newSlot.id)!;
         newSlotObj.matchId = rescheduleMatch.id;
 
-        // aggiorna la match scheduledTime/location
         const groupIndex = tObj.groups.findIndex(g => g.matches.some(m => m.id === rescheduleMatch.id));
         if (groupIndex === -1) throw new Error("Girone della partita non trovato");
         const matchObj = tObj.groups[groupIndex].matches.find(m => m.id === rescheduleMatch.id)!;
@@ -221,14 +220,13 @@ const TournamentView: React.FC<{
         transaction.update(docRef, updatedEvent);
       });
 
-      // aggiorna stato locale
+      // aggiorna stato locale: libera prev slot, assegna new slot e aggiorna match
       await handleUpdateEvents(prevEvents => prevEvents.map(e => {
         if (e.id !== event.id) return e;
         return {
           ...e,
           tournaments: e.tournaments.map(t => {
             if (t.id !== tournament.id) return t;
-            // trova prev slot id
             const prevSlotId = t.timeSlots.find(ts => ts.matchId === rescheduleMatch.id)?.id;
             return {
               ...t,
@@ -261,7 +259,7 @@ const TournamentView: React.FC<{
     }
   };
 
-  // --- CANCEL BOOKING: annulla la prenotazione di una partita (libera lo slot e imposta status 'pending') ---
+  // --- CANCEL BOOKING: annulla la prenotazione (libera lo slot e imposta match a 'pending') ---
   const handleCancelBooking = async (matchToCancel: Match) => {
     setBookingLoading(true);
     setBookingError(null);
@@ -281,13 +279,11 @@ const TournamentView: React.FC<{
         const slotIndex = tSnapshot.timeSlots.findIndex(ts => ts.matchId === matchToCancel.id);
         if (slotIndex === -1) throw new Error("Slot associato alla partita non trovato");
 
-        // Applichiamo le modifiche
         const updatedEvent = JSON.parse(JSON.stringify(currentEvent)) as Event;
         const tObj = updatedEvent.tournaments.find(tt => tt.id === tournament.id)!;
         const slotObj = tObj.timeSlots.find(ts => ts.id === tSnapshot.timeSlots[slotIndex].id)!;
         slotObj.matchId = null;
 
-        // trova la partita e resetta stato
         const groupIndex = tObj.groups.findIndex(g => g.matches.some(m => m.id === matchToCancel.id));
         if (groupIndex === -1) throw new Error("Girone della partita non trovato");
         const matchObj = tObj.groups[groupIndex].matches.find(m => m.id === matchToCancel.id)!;
@@ -322,7 +318,6 @@ const TournamentView: React.FC<{
           }),
         };
       }));
-
     } catch (err: any) {
       console.error("Errore annullamento prenotazione:", err);
       setBookingError(err?.message || 'Errore durante l\'annullamento della prenotazione');
@@ -331,7 +326,7 @@ const TournamentView: React.FC<{
     }
   };
 
-  // --- DELETE RESULT: rimuovere il risultato già inserito e ripristinare stato (scheduled/pending) ---
+  // --- DELETE RESULT: rimuove il risultato (score1/score2) mantenendo scheduled/pending come prima ---
   const handleDeleteResult = async (matchToDelete: Match) => {
     setBookingLoading(true);
     setBookingError(null);
@@ -347,18 +342,17 @@ const TournamentView: React.FC<{
         if (tIndex === -1) throw new Error("Torneo non trovato");
         const tSnapshot = currentEvent.tournaments[tIndex];
 
-        // trova la partita e il suo gruppo
         const groupIndex = tSnapshot.groups.findIndex(g => g.matches.some(m => m.id === matchToDelete.id));
         if (groupIndex === -1) throw new Error("Girone della partita non trovato");
         const matchIndex = tSnapshot.groups[groupIndex].matches.findIndex(m => m.id === matchToDelete.id);
         if (matchIndex === -1) throw new Error("Partita non trovata");
 
-        // Applichiamo le modifiche: rimuoviamo score e riportiamo stato a 'scheduled' (se aveva scheduledTime) o 'pending'
         const updatedEvent = JSON.parse(JSON.stringify(currentEvent)) as Event;
         const tObj = updatedEvent.tournaments.find(tt => tt.id === tournament.id)!;
         const groupObj = tObj.groups[groupIndex];
         const matchObj = groupObj.matches.find(m => m.id === matchToDelete.id)!;
-        // decide nuovo stato
+
+        // decide nuovo stato in base alla presenza di scheduledTime
         if (matchObj.scheduledTime) {
           matchObj.status = 'scheduled';
         } else {
@@ -391,7 +385,6 @@ const TournamentView: React.FC<{
           }),
         };
       }));
-
     } catch (err: any) {
       console.error("Errore cancellazione risultato:", err);
       setBookingError(err?.message || 'Errore durante la cancellazione del risultato');
@@ -400,6 +393,7 @@ const TournamentView: React.FC<{
     }
   };
 
+  // Modifica risultato (usato dalla modal) — updateDoc perché è un singolo campo
   const handleUpdateMatchResult = async (matchId: string, s1: number, s2: number) => {
     await handleUpdateEvents(prevEvents => prevEvents.map(e => {
       if (e.id !== event.id) return e;
@@ -452,7 +446,7 @@ const TournamentView: React.FC<{
         {isOrganizer && <button onClick={() => setActiveTab('groupManagement')} className={activeTab === 'groupManagement' ? 'font-bold' : ''}>Gestione Gironi</button>}
         {isOrganizer && <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'font-bold' : ''}>Impostazioni</button>}
         {tournament.playoffs && <button onClick={() => setActiveTab('playoffs')} className={activeTab === 'playoffs' ? 'font-bold' : ''}>Playoffs</button>}
-        {tournament.consolationBracket && <button onClick={() => setActiveTab('consolation') } className={activeTab === 'consolation' ? 'font-bold' : ''}>Consolation</button>}
+        {tournament.consolationBracket && <button onClick={() => setActiveTab('consolation')} className={activeTab === 'consolation' ? 'font-bold' : ''}>Consolation</button>}
       </div>
 
       <div className="animate-fadeIn">
@@ -479,7 +473,7 @@ const TournamentView: React.FC<{
               isOrganizer={isOrganizer}
               loggedInPlayerId={loggedInPlayerId}
               onPlayerContact={onPlayerContact}
-              onRescheduleMatch={setRescheduleMatch}
+              onRescheduleMatch={(m) => setRescheduleMatch(m)}
               onCancelBooking={handleCancelBooking}
               onDeleteResult={handleDeleteResult}
             />
@@ -505,8 +499,8 @@ const TournamentView: React.FC<{
             loggedInPlayerId={loggedInPlayerId}
             selectedGroupId={selectedGroupId ?? undefined}
             onSlotBook={handleSlotInitiatedBooking}
-            onRequestReschedule={(match) => setRescheduleMatch(match)}
-            onRequestCancelBooking={(match) => handleCancelBooking(match)}
+            onRequestReschedule={(m) => setRescheduleMatch(m)}
+            onRequestCancelBooking={(m) => handleCancelBooking(m)}
           />
         )}
 
@@ -562,7 +556,7 @@ const TournamentView: React.FC<{
         </div>
       )}
 
-      {/* Modal: reschedule (usata sia da MatchList -> "Cambia slot" sia da TimeSlots -> "Modifica") */}
+      {/* Modal: reschedule (usata sia da MatchList -> "Modifica pren." sia da TimeSlots -> "Modifica pren.") */}
       {rescheduleMatch && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
           <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
@@ -584,10 +578,7 @@ const TournamentView: React.FC<{
                     className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg transition-colors"
                   >
                     <p>
-                      {new Date(ts.time).toLocaleString('it-IT', {
-                        dateStyle: 'full',
-                        timeStyle: 'short',
-                      })}
+                      {new Date(ts.time).toLocaleDateString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}
                     </p>
                     <p className="text-sm text-text-secondary">{ts.location}</p>
                   </button>
@@ -602,7 +593,7 @@ const TournamentView: React.FC<{
         </div>
       )}
 
-      {/* Modal: slot-first (quando utente ha cliccato Prenota su slot e deve scegliere la sua partita) */}
+      {/* Modal: slot-first -> scegli la tua partita per lo slot selezionato */}
       {bookingSlot && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
           <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
@@ -611,7 +602,6 @@ const TournamentView: React.FC<{
               Hai scelto lo slot: <strong className="text-text-primary">{new Date(bookingSlot.time).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })} — {bookingSlot.location}</strong>
             </p>
 
-            {/* Trova il girone dell'utente */}
             {(() => {
               const playerGroup = selectedGroup ?? tournament.groups.find(g => loggedInPlayerId ? g.playerIds.includes(loggedInPlayerId) : false);
               if (!loggedInPlayerId || !playerGroup) {
@@ -651,7 +641,7 @@ const TournamentView: React.FC<{
         </div>
       )}
 
-      {/* Modal modifica risultato (resta invariato) */}
+      {/* Modal risultato (inserisci/modifica) */}
       {editingMatch && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
           <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
