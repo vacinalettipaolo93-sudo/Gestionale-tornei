@@ -9,17 +9,20 @@ interface TimeSlotsProps {
     tournament: Tournament;
     setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
     isOrganizer: boolean;
+    // NUOVI props:
+    loggedInPlayerId?: string;
+    selectedGroupId?: string;
+    onSlotBook?: (slot: TimeSlot) => void;
 }
 
-const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isOrganizer }) => {
+const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isOrganizer, loggedInPlayerId, selectedGroupId, onSlotBook }) => {
     const [newTime, setNewTime] = useState('');
     const [newLocation, setNewLocation] = useState('');
 
-    // AGGIUNGI SLOT ORARIO e aggiorna Firestore
     const handleAddSlot = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newTime.trim() || !newLocation.trim()) return;
-        
+
         const newSlot: TimeSlot = {
             id: `ts${Date.now()}`,
             time: new Date(newTime).toISOString(),
@@ -48,41 +51,21 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
         setNewLocation('');
     };
 
-    // ELIMINA SLOT ORARIO e aggiorna Firestore
     const handleDeleteSlot = async (slotId: string) => {
-        // Trova lo slot e la sua time
-        const slotToDelete = tournament.timeSlots.find(ts => ts.id === slotId);
         const updatedTimeSlots = tournament.timeSlots.filter(ts => ts.id !== slotId);
-
-        // Unschedule match se usava questo slot
-        const updatedGroups = tournament.groups.map(g => ({
-            ...g,
-            matches: g.matches.map(m =>
-                slotToDelete && m.scheduledTime === slotToDelete.time
-                    ? { ...m, status: 'pending', scheduledTime: undefined, location: undefined }
-                    : m
-            )
-        }));
-
         setEvents(prev => prev.map(ev => ev.id === event.id ? {
             ...ev,
-            tournaments: ev.tournaments.map(t => t.id === tournament.id ? {
-                ...t,
-                timeSlots: updatedTimeSlots,
-                groups: updatedGroups
-            } : t)
+            tournaments: ev.tournaments.map(t => t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t)
         } : ev));
-
         await updateDoc(doc(db, "events", event.id), {
             tournaments: event.tournaments.map(t =>
-                t.id === tournament.id
-                    ? { ...t, timeSlots: updatedTimeSlots, groups: updatedGroups }
-                    : t
+                t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t
             )
         });
     };
 
-    const getMatchPlayers = (matchId: string) => {
+    const getMatchPlayers = (matchId?: string | null) => {
+        if (!matchId) return '';
         for (const group of tournament.groups) {
             const match = group.matches.find(m => m.id === matchId);
             if (match) {
@@ -93,6 +76,12 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
         }
         return 'Partita non trovata';
     };
+
+    // trova il girone del giocatore (se esiste)
+    const playerGroup = loggedInPlayerId ? tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId)) : undefined;
+    // Se selectedGroupId è passato, preferiamolo
+    const effectiveGroup = selectedGroupId ? tournament.groups.find(g => g.id === selectedGroupId) : playerGroup;
+    const isParticipantInGroup = !!(effectiveGroup && loggedInPlayerId && effectiveGroup.playerIds.includes(loggedInPlayerId));
 
     return (
         <div className="space-y-6">
@@ -130,11 +119,19 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({ event, tournament, setEvents, isO
                                 <p className="font-semibold">{new Date(slot.time).toLocaleString('it-IT', { dateStyle: 'long', timeStyle: 'short' })} - {slot.location}</p>
                                 <p className={`text-sm ${slot.matchId ? 'text-text-secondary' : 'text-green-400'}`}>{slot.matchId ? `Occupato da: ${getMatchPlayers(slot.matchId)}` : 'Libero'}</p>
                             </div>
-                            {isOrganizer && (
-                                <button onClick={() => handleDeleteSlot(slot.id)} className="text-text-secondary/50 hover:text-red-500 transition-colors">
-                                    <TrashIcon className="w-5 h-5"/>
-                                </button>
-                            )}
+                            <div className="flex items-center gap-3">
+                                {/* Pulsante Prenota SOLO se è libero, l'utente è partecipante del girone e onSlotBook è fornito */}
+                                {!slot.matchId && onSlotBook && isParticipantInGroup && (
+                                    <button onClick={() => onSlotBook(slot)} className="bg-accent/80 hover:bg-accent text-primary font-bold py-2 px-3 rounded-lg text-sm transition-colors">
+                                        Prenota
+                                    </button>
+                                )}
+                                {isOrganizer && (
+                                    <button onClick={() => handleDeleteSlot(slot.id)} className="text-text-secondary/50 hover:text-red-500 transition-colors">
+                                        <TrashIcon className="w-5 h-5"/>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     )) : <p className="text-text-secondary text-center py-4">Nessuno slot orario creato.</p>}
                 </div>
