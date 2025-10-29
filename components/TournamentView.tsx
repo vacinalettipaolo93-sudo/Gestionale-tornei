@@ -12,7 +12,11 @@ import TournamentSettings from './TournamentSettings';
 import Playoffs from './Playoffs';
 import ConsolationBracket from './ConsolationBracket';
 
-// Mantiene il rendering originale e aggiunge i flow per booking/reschedule/cancel con transazioni.
+// Questo componente mantiene il rendering originale e aggiunge:
+// - prenotazione "slot-first" (bookingSlot + runTransaction)
+// - reschedule (spostamento) da match o da slot (runTransaction)
+// - annullamento prenotazione (runTransaction)
+// - cancellazione / modifica risultato (runTransaction per cancellazione, updateDoc per aggiornamenti UI)
 
 const TournamentView: React.FC<{
   event: Event;
@@ -25,7 +29,6 @@ const TournamentView: React.FC<{
   const [activeTab, setActiveTab] = useState<'standings'|'matches'|'players'|'timeSlots'|'chat'|'groupManagement'|'settings'|'playoffs'|'consolation'>('standings');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(tournament.groups.length > 0 ? tournament.groups[0].id : null);
 
-  // Stati principali
   const [bookingMatch, setBookingMatch] = useState<Match | null>(null); // match -> scegli slot (flow originario)
   const [bookingSlot, setBookingSlot] = useState<TimeSlot | null>(null); // slot-first: slot scelto -> scegli match del girone
   const [rescheduleMatch, setRescheduleMatch] = useState<Match | null>(null); // match da spostare
@@ -37,7 +40,7 @@ const TournamentView: React.FC<{
 
   const selectedGroup = selectedGroupId ? tournament.groups.find(g => g.id === selectedGroupId) ?? null : null;
 
-  // wrapper per aggiornare UI + Firestore (usata esistente)
+  // Wrapper per aggiornare UI + Firestore (usata in tutto il componente)
   const handleUpdateEvents = async (updater: (prevEvents: Event[]) => Event[]) => {
     setEvents(updater);
     const updatedEvents = updater([event]);
@@ -84,7 +87,7 @@ const TournamentView: React.FC<{
     setBookingError(null);
   };
 
-  // Prenota match nello slot selezionato usando transazione
+  // Prenota match nello slot selezionato usando transazione (atomic)
   const handleBookMatchWithSlot = async (matchToBook: Match) => {
     if (!bookingSlot) return;
     setBookingLoading(true);
@@ -114,7 +117,7 @@ const TournamentView: React.FC<{
         if (matchIndex === -1) throw new Error("Partita non trovata nel girone");
         if (tSnapshot.groups[groupIndex].matches[matchIndex].status !== 'pending') throw new Error("La partita non è più disponibile");
 
-        // applica su copia e commit
+        // Applica su copia profonda e commit
         const updatedEvent = JSON.parse(JSON.stringify(currentEvent)) as Event;
         const tObj = updatedEvent.tournaments.find(tt => tt.id === tournament.id)!;
         const slotToUpdate = tObj.timeSlots.find(ts => ts.id === bookingSlot.id)!;
@@ -209,7 +212,7 @@ const TournamentView: React.FC<{
         transaction.update(docRef, updatedEvent);
       });
 
-      // aggiorna UI locale
+      // aggiorna stato locale
       await handleUpdateEvents(prevEvents => prevEvents.map(e => {
         if (e.id !== event.id) return e;
         return {
@@ -248,7 +251,7 @@ const TournamentView: React.FC<{
     }
   };
 
-  // CANCEL BOOKING: annulla prenotazione (libera slot, pone match pending)
+  // CANCEL BOOKING: annulla la prenotazione (libera slot e porta match a 'pending')
   const handleCancelBooking = async (matchToCancel: Match) => {
     setBookingLoading(true);
     setBookingError(null);
@@ -282,7 +285,7 @@ const TournamentView: React.FC<{
         transaction.update(docRef, updatedEvent);
       });
 
-      // aggiorna UI locale
+      // aggiorna stato locale
       await handleUpdateEvents(prevEvents => prevEvents.map(e => {
         if (e.id !== event.id) return e;
         return {
@@ -314,7 +317,7 @@ const TournamentView: React.FC<{
     }
   };
 
-  // DELETE RESULT: rimuove score mantenendo scheduled/pending come prima
+  // DELETE RESULT: rimuove i punteggi e mantiene scheduled/pending come prima
   const handleDeleteResult = async (matchToDelete: Match) => {
     setBookingLoading(true);
     setBookingError(null);
