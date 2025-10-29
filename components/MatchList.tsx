@@ -10,7 +10,6 @@ interface MatchListProps {
   isOrganizer: boolean;
   loggedInPlayerId?: string;
   onPlayerContact: (player: Player) => void;
-  // AGGIUNTE:
   onRescheduleMatch?: (match: Match) => void;
   onCancelBooking?: (match: Match) => void;
   onDeleteResult?: (match: Match) => void;
@@ -38,14 +37,11 @@ const MatchCard: React.FC<{
 
   const canEnterResult = isParticipant || isOrganizer;
   const canBook = isParticipant || isOrganizer;
-  const canManageBooking = isParticipant || isOrganizer; // both can reschedule/cancel
-  const canDeleteResult = isParticipant || isOrganizer; // both can delete result
+  const canManageBooking = isParticipant || isOrganizer;
+  const canDeleteResult = isParticipant || isOrganizer;
 
-  const handleEnterResult = () => {
-     onEditResult(match);
-  }
+  const handleEnterResult = () => onEditResult(match);
 
-  // Show result string when present
   const renderResult = () => {
     if (match.score1 != null && match.score2 != null) {
       return (
@@ -68,7 +64,6 @@ const MatchCard: React.FC<{
           </div>
         </div>
 
-        {/* Right column: still shows time/location if no result */}
         <div className="text-right">
           {!(match.score1 != null && match.score2 != null) && match.status === 'scheduled' && match.scheduledTime ? (
             <>
@@ -81,7 +76,6 @@ const MatchCard: React.FC<{
         </div>
       </div>
 
-      {/* Centered result (visible when score present) */}
       {renderResult()}
 
       <div className="flex items-center justify-center gap-4 pt-4 mt-4 border-t border-tertiary/50">
@@ -97,31 +91,20 @@ const MatchCard: React.FC<{
           </button>
         )}
 
-        {/* Se match è scheduled: mostra Cambia slot e Annulla prenotazione per chi può gestire la prenotazione */}
         {match.status === 'scheduled' && canManageBooking && onRescheduleMatch && (
-          <button
-            onClick={() => onRescheduleMatch(match)}
-            className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors"
-          >
+          <button onClick={() => onRescheduleMatch(match)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
             Modifica pren.
           </button>
         )}
 
         {match.status === 'scheduled' && canManageBooking && onCancelBooking && (
-          <button
-            onClick={() => onCancelBooking(match)}
-            className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors"
-          >
+          <button onClick={() => onCancelBooking(match)} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
             Annulla pren.
           </button>
         )}
 
-        {/* Se match ha risultato: mostra pulsante per eliminare risultato */}
         {match.score1 != null && match.score2 != null && canDeleteResult && onDeleteResult && (
-          <button
-            onClick={() => onDeleteResult(match)}
-            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors"
-          >
+          <button onClick={() => onDeleteResult(match)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
             Elimina risultato
           </button>
         )}
