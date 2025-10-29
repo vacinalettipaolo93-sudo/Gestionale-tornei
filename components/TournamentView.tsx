@@ -172,7 +172,7 @@ const TournamentView: React.FC<{
     }
   };
 
-  // --- RESCHEDULE: spostare una partita già prenotata in un altro slot ---
+  // --- RESCHEDULE: spostare partita già prenotata in un altro slot ---
   const handleRescheduleBookMatch = async (newSlot: TimeSlot) => {
     if (!rescheduleMatch) return;
     setBookingLoading(true);
@@ -510,15 +510,15 @@ const TournamentView: React.FC<{
           <GroupManagement event={event} tournament={tournament} setEvents={setEvents} />
         )}
 
-        {activeTab === 'settings' and isOrganizer && (
+        {activeTab === 'settings' && isOrganizer && (
           <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />
         )}
 
-        {activeTab === 'playoffs' and tournament.playoffs && (
+        {activeTab === 'playoffs' && tournament.playoffs && (
           <Playoffs event={event} tournament={tournament} setEvents={setEvents} />
         )}
 
-        {activeTab === 'consolation' and tournament.consolationBracket && (
+        {activeTab === 'consolation' && tournament.consolationBracket && (
           <ConsolationBracket event={event} tournament={tournament} setEvents={setEvents} />
         )}
       </div>
