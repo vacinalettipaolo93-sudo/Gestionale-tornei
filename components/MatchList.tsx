@@ -49,7 +49,7 @@ const MatchCard: React.FC<{
   const renderResult = () => {
     if (match.score1 != null && match.score2 != null) {
       return (
-        <div className="text-xl font-bold">
+        <div className="text-2xl font-bold text-center w-full">
           {match.score1} — {match.score2}
         </div>
       );
@@ -67,20 +67,22 @@ const MatchCard: React.FC<{
             <div className="text-sm text-text-secondary">{player2.name}</div>
           </div>
         </div>
+
+        {/* Right column: still shows time/location if no result */}
         <div className="text-right">
-          {/* If match has result show it; else if scheduled show date/time/location; else show 'vs' */}
-          {match.score1 != null && match.score2 != null ? (
-            renderResult()
-          ) : match.status === 'scheduled' && match.scheduledTime ? (
+          {!(match.score1 != null && match.score2 != null) && match.status === 'scheduled' && match.scheduledTime ? (
             <>
               <div>{new Date(match.scheduledTime).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })} alle {new Date(match.scheduledTime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</div>
               {match.location && <div className="font-semibold">{match.location}</div>}
             </>
-          ) : (
+          ) : !(match.score1 != null && match.score2 != null) ? (
             <div className="text-lg font-mono text-text-secondary">vs</div>
-          )}
+          ) : null}
         </div>
       </div>
+
+      {/* Centered result (visible when score present) */}
+      {renderResult()}
 
       <div className="flex items-center justify-center gap-4 pt-4 mt-4 border-t border-tertiary/50">
         {match.status === 'pending' && canBook && (
@@ -101,7 +103,7 @@ const MatchCard: React.FC<{
             onClick={() => onRescheduleMatch(match)}
             className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors"
           >
-            Cambia slot
+            Modifica pren.
           </button>
         )}
 
@@ -114,7 +116,7 @@ const MatchCard: React.FC<{
           </button>
         )}
 
-        {/* Se match è completed: mostra pulsante per eliminare risultato */}
+        {/* Se match ha risultato: mostra pulsante per eliminare risultato */}
         {match.score1 != null && match.score2 != null && canDeleteResult && onDeleteResult && (
           <button
             onClick={() => onDeleteResult(match)}
