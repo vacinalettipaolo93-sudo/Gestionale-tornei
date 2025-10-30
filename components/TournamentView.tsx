@@ -13,8 +13,8 @@ import Playoffs from './Playoffs';
 import ConsolationBracket from './ConsolationBracket';
 
 // TournamentView: visualizzazione principale del torneo.
-// Contiene: classifica, partite, giocatori, slot, chat, gestione gironi, impostazioni,
-// e i pannelli Playoffs e Consolation (accessibili se presenti e per organizer).
+// NAV ordering required: Classifica - Partite - Giocatori - Slot Orari - Playoff - Consolazione - Gestione Gironi - Impostazioni - Chat
+// Playoff/Consolation always visible in admin (with note if not generated), visible to user only if generated.
 
 const TournamentView: React.FC<{
   event: Event;
@@ -24,15 +24,15 @@ const TournamentView: React.FC<{
   loggedInPlayerId?: string;
   onPlayerContact: (p: Player) => void;
 }> = ({ event, tournament, setEvents, isOrganizer, loggedInPlayerId, onPlayerContact }) => {
-  const [activeTab, setActiveTab] = useState<'standings'|'matches'|'players'|'timeSlots'|'chat'|'groupManagement'|'settings'|'playoffs'|'consolation'>('standings');
+  const [activeTab, setActiveTab] = useState<'standings'|'matches'|'players'|'timeSlots'|'playoffs'|'consolation'|'groupManagement'|'settings'|'chat'>('standings');
 
   // selezione girone e modalità di visualizzazione
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(tournament.groups.length > 0 ? tournament.groups[0].id : null);
-  const [viewingOtherGroups, setViewingOtherGroups] = useState(false); // se true l'utente guarda altri gironi (read-only)
+  const [viewingOtherGroups, setViewingOtherGroups] = useState(false);
 
   // booking / reschedule / edit result
-  const [bookingMatch, setBookingMatch] = useState<Match | null>(null); // flow originario match -> scegli slot
-  const [bookingSlot, setBookingSlot] = useState<TimeSlot | null>(null); // slot-first flow
+  const [bookingMatch, setBookingMatch] = useState<Match | null>(null);
+  const [bookingSlot, setBookingSlot] = useState<TimeSlot | null>(null);
   const [rescheduleMatch, setRescheduleMatch] = useState<Match | null>(null);
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   const [score1, setScore1] = useState('');
@@ -40,10 +40,8 @@ const TournamentView: React.FC<{
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
 
-  // trova girone dell'utente (se esiste)
   const userGroupId = loggedInPlayerId ? tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId))?.id : undefined;
 
-  // all'apertura/metchange: se non organizer e utente iscritto, seleziona il suo girone di default e metti viewingOtherGroups false
   useEffect(() => {
     if (!isOrganizer && loggedInPlayerId) {
       const myGroup = tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId));
@@ -114,11 +112,9 @@ const TournamentView: React.FC<{
       await runTransaction(db, async (transaction) => {
         const docSnap = await transaction.get(docRef);
         if (!docSnap.exists()) throw new Error("Evento non trovato");
-
         const currentEvent = docSnap.data() as Event;
         const tIndex = currentEvent.tournaments.findIndex(t => t.id === tournament.id);
         if (tIndex === -1) throw new Error("Torneo non trovato");
-
         const tSnapshot = currentEvent.tournaments[tIndex];
 
         const slotIndex = tSnapshot.timeSlots.findIndex(ts => ts.id === bookingSlot.id);
@@ -191,11 +187,9 @@ const TournamentView: React.FC<{
       await runTransaction(db, async (transaction) => {
         const docSnap = await transaction.get(docRef);
         if (!docSnap.exists()) throw new Error("Evento non trovato");
-
         const currentEvent = docSnap.data() as Event;
         const tIndex = currentEvent.tournaments.findIndex(t => t.id === tournament.id);
         if (tIndex === -1) throw new Error("Torneo non trovato");
-
         const tSnapshot = currentEvent.tournaments[tIndex];
 
         const prevSlotIndex = tSnapshot.timeSlots.findIndex(ts => ts.matchId === rescheduleMatch.id);
@@ -431,23 +425,21 @@ const TournamentView: React.FC<{
 
   const getPlayer = (playerId?: string) => event.players.find(p => p.id === playerId);
 
-  // Provide fallback tournament objects for admin so Playoffs/Consolation can be opened even if not generated
+  // fallback tournament objects for admin so Playoffs/Consolation open even if not generated
   const tournamentForPlayoffs = isOrganizer && !tournament.playoffs ? { ...tournament, playoffs: { isGenerated: false, matches: [], finalId: null, bronzeFinalId: null } as any } : tournament;
   const tournamentForConsolation = isOrganizer && !tournament.consolationBracket ? { ...tournament, consolationBracket: { isGenerated: false, matches: [], finalId: null, bronzeFinalId: null } as any } : tournament;
 
   // ---------- RENDER ----------
   return (
     <div>
-      {/* NAV */}
+      {/* NAV in the requested order */}
       <div className="flex gap-2 mb-4">
         <button onClick={() => setActiveTab('standings')} className={activeTab === 'standings' ? 'font-bold' : ''}>Classifica</button>
         <button onClick={() => setActiveTab('matches')} className={activeTab === 'matches' ? 'font-bold' : ''}>Partite</button>
         <button onClick={() => setActiveTab('players')} className={activeTab === 'players' ? 'font-bold' : ''}>Giocatori</button>
         <button onClick={() => setActiveTab('timeSlots')} className={activeTab === 'timeSlots' ? 'font-bold' : ''}>Slot Orari</button>
-        <button onClick={() => setActiveTab('chat')} className={activeTab === 'chat' ? 'font-bold' : ''}>Chat</button>
-        {isOrganizer && <button onClick={() => setActiveTab('groupManagement')} className={activeTab === 'groupManagement' ? 'font-bold' : ''}>Gestione Gironi</button>}
-        {isOrganizer && <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'font-bold' : ''}>Impostazioni</button>}
-        {/* Playoffs e Consolation: sempre visibili per organizer; per utenti solo se generati */}
+
+        {/* Playoffs - Consolation: admin always sees, users only if generated */}
         {isOrganizer ? (
           <>
             <button onClick={() => setActiveTab('playoffs')} className={activeTab === 'playoffs' ? 'font-bold' : ''}>
@@ -463,25 +455,25 @@ const TournamentView: React.FC<{
             {tournament.consolationBracket && <button onClick={() => setActiveTab('consolation')} className={activeTab === 'consolation' ? 'font-bold' : ''}>Consolation</button>}
           </>
         )}
+
+        {/* Admin-only: Gestione Gironi e Impostazioni */}
+        {isOrganizer && <button onClick={() => setActiveTab('groupManagement')} className={activeTab === 'groupManagement' ? 'font-bold' : ''}>Gestione Gironi</button>}
+        {isOrganizer && <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'font-bold' : ''}>Impostazioni</button>}
+
+        {/* Chat always last */}
+        <button onClick={() => setActiveTab('chat')} className={activeTab === 'chat' ? 'font-bold' : ''}>Chat</button>
       </div>
 
-      {/* Toggle per utenti: vedere altri gironi (solo risultati) */}
+      {/* Toggle for users to view other groups */}
       {!isOrganizer && loggedInPlayerId && (
         <div className="mb-4 flex items-center gap-3">
           <label className="text-sm text-text-secondary">Visualizza altri gironi?</label>
-          <button
-            onClick={() => setViewingOtherGroups(prev => !prev)}
-            className="bg-tertiary/80 hover:bg-tertiary text-text-primary py-1 px-3 rounded"
-          >
+          <button onClick={() => setViewingOtherGroups(prev => !prev)} className="bg-tertiary/80 hover:bg-tertiary text-text-primary py-1 px-3 rounded">
             {viewingOtherGroups ? 'Disattiva (torna al tuo girone)' : 'Mostra altri gironi (solo risultati)'}
           </button>
 
           {viewingOtherGroups && (
-            <select
-              value={selectedGroupId ?? ''}
-              onChange={e => setSelectedGroupId(e.target.value || null)}
-              className="ml-2 bg-primary border rounded p-1"
-            >
+            <select value={selectedGroupId ?? ''} onChange={e => setSelectedGroupId(e.target.value || null)} className="ml-2 bg-primary border rounded p-1">
               <option value="">-- Scegli girone --</option>
               {tournament.groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
@@ -489,7 +481,7 @@ const TournamentView: React.FC<{
         </div>
       )}
 
-      {/* organizer: sempre select per switchare girone */}
+      {/* Organizer: select per switchare girone */}
       {isOrganizer && (
         <div className="mb-4">
           <label className="text-sm text-text-secondary mr-2">Seleziona girone:</label>
@@ -543,12 +535,6 @@ const TournamentView: React.FC<{
           />
         )}
 
-        {activeTab === 'chat' && <ChatPanel />}
-
-        {activeTab === 'groupManagement' && isOrganizer && <GroupManagement event={event} tournament={tournament} setEvents={setEvents} />}
-
-        {activeTab === 'settings' && isOrganizer && <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />}
-
         {activeTab === 'playoffs' && (isOrganizer || tournament.playoffs) && (
           <Playoffs
             event={event}
@@ -568,10 +554,13 @@ const TournamentView: React.FC<{
             loggedInPlayerId={loggedInPlayerId}
           />
         )}
+
+        {activeTab === 'groupManagement' && isOrganizer && <GroupManagement event={event} tournament={tournament} setEvents={setEvents} />}
+        {activeTab === 'settings' && isOrganizer && <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />}
+        {activeTab === 'chat' && <ChatPanel />}
       </div>
 
-      {/* --- Modals --- */}
-      {/* Modal bookingMatch -> selezione slot (flow originario) */}
+      {/* --- Modals (booking/reschedule/slot-first/result) --- */}
       {bookingMatch && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
@@ -594,7 +583,6 @@ const TournamentView: React.FC<{
         </div>
       )}
 
-      {/* Modal reschedule */}
       {rescheduleMatch && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
@@ -615,7 +603,6 @@ const TournamentView: React.FC<{
         </div>
       )}
 
-      {/* Modal slot-first */}
       {bookingSlot && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
@@ -644,7 +631,6 @@ const TournamentView: React.FC<{
         </div>
       )}
 
-      {/* Modal risultato */}
       {editingMatch && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
