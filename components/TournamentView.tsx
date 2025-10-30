@@ -431,6 +431,10 @@ const TournamentView: React.FC<{
 
   const getPlayer = (playerId?: string) => event.players.find(p => p.id === playerId);
 
+  // Provide fallback tournament objects for admin so Playoffs/Consolation can be opened even if not generated
+  const tournamentForPlayoffs = isOrganizer && !tournament.playoffs ? { ...tournament, playoffs: { isGenerated: false, matches: [], finalId: null, bronzeFinalId: null } as any } : tournament;
+  const tournamentForConsolation = isOrganizer && !tournament.consolationBracket ? { ...tournament, consolationBracket: { isGenerated: false, matches: [], finalId: null, bronzeFinalId: null } as any } : tournament;
+
   // ---------- RENDER ----------
   return (
     <div>
@@ -443,9 +447,22 @@ const TournamentView: React.FC<{
         <button onClick={() => setActiveTab('chat')} className={activeTab === 'chat' ? 'font-bold' : ''}>Chat</button>
         {isOrganizer && <button onClick={() => setActiveTab('groupManagement')} className={activeTab === 'groupManagement' ? 'font-bold' : ''}>Gestione Gironi</button>}
         {isOrganizer && <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'font-bold' : ''}>Impostazioni</button>}
-        {/* Playoffs e Consolation: mostrati se il torneo li definisce */}
-        {tournament.playoffs && <button onClick={() => setActiveTab('playoffs')} className={activeTab === 'playoffs' ? 'font-bold' : ''}>Playoffs</button>}
-        {tournament.consolationBracket && <button onClick={() => setActiveTab('consolation')} className={activeTab === 'consolation' ? 'font-bold' : ''}>Consolation</button>}
+        {/* Playoffs e Consolation: sempre visibili per organizer; per utenti solo se generati */}
+        {isOrganizer ? (
+          <>
+            <button onClick={() => setActiveTab('playoffs')} className={activeTab === 'playoffs' ? 'font-bold' : ''}>
+              Playoffs{!tournament.playoffs ? ' (non generato)' : ''}
+            </button>
+            <button onClick={() => setActiveTab('consolation')} className={activeTab === 'consolation' ? 'font-bold' : ''}>
+              Consolation{!tournament.consolationBracket ? ' (non generato)' : ''}
+            </button>
+          </>
+        ) : (
+          <>
+            {tournament.playoffs && <button onClick={() => setActiveTab('playoffs')} className={activeTab === 'playoffs' ? 'font-bold' : ''}>Playoffs</button>}
+            {tournament.consolationBracket && <button onClick={() => setActiveTab('consolation')} className={activeTab === 'consolation' ? 'font-bold' : ''}>Consolation</button>}
+          </>
+        )}
       </div>
 
       {/* Toggle per utenti: vedere altri gironi (solo risultati) */}
@@ -504,11 +521,9 @@ const TournamentView: React.FC<{
         )}
 
         {activeTab === 'players' && (
-          // se organizer gestisce con PlayerManagement, altrimenti mostra solo i players dell'evento (o un componente GroupPlayers se preferisci)
           isOrganizer ? (
             <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={onPlayerContact} />
           ) : (
-            // default: mostra gestione giocatori dell'evento; se preferisci limitare ai soli del girone, sostituisci con GroupPlayers
             <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={onPlayerContact} />
           )
         )}
@@ -534,20 +549,20 @@ const TournamentView: React.FC<{
 
         {activeTab === 'settings' && isOrganizer && <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />}
 
-        {activeTab === 'playoffs' && tournament.playoffs && (
+        {activeTab === 'playoffs' && (isOrganizer || tournament.playoffs) && (
           <Playoffs
             event={event}
-            tournament={tournament}
+            tournament={tournamentForPlayoffs}
             setEvents={setEvents}
             isOrganizer={isOrganizer}
             loggedInPlayerId={loggedInPlayerId}
           />
         )}
 
-        {activeTab === 'consolation' && tournament.consolationBracket && (
+        {activeTab === 'consolation' && (isOrganizer || tournament.consolationBracket) && (
           <ConsolationBracket
             event={event}
-            tournament={tournament}
+            tournament={tournamentForConsolation}
             setEvents={setEvents}
             isOrganizer={isOrganizer}
             loggedInPlayerId={loggedInPlayerId}
