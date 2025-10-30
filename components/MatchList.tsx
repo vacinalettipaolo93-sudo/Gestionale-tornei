@@ -4,7 +4,8 @@ import { type Group, type Match, type Player } from '../types';
 interface MatchListProps {
   group: Group;
   players: Player[];
-  onEditResult: (match: Match) => void;
+  // onEditResult now also receives optional anchor rect (from the clicked button) to position editor
+  onEditResult: (match: Match, anchorRect?: DOMRect | null) => void;
   onBookMatch: (match: Match) => void;
   isOrganizer: boolean;
   loggedInPlayerId?: string;
@@ -12,14 +13,14 @@ interface MatchListProps {
   onRescheduleMatch?: (match: Match) => void;
   onCancelBooking?: (match: Match) => void;
   onDeleteResult?: (match: Match) => void;
-  viewingOwnGroup?: boolean; // true se l'utente sta guardando il proprio girone (può modificare)
+  viewingOwnGroup?: boolean;
 }
 
 const MatchCard: React.FC<{
   match: Match;
   player1?: Player;
   player2?: Player;
-  onEditResult: (match: Match) => void;
+  onEditResult: (match: Match, anchorRect?: DOMRect | null) => void;
   onBookMatch: (match: Match) => void;
   isOrganizer: boolean;
   loggedInPlayerId?: string;
@@ -29,47 +30,56 @@ const MatchCard: React.FC<{
   onDeleteResult?: (match: Match) => void;
   viewingOwnGroup?: boolean;
 }> = ({
-  match, player1, player2, onEditResult, onBookMatch, isOrganizer, loggedInPlayerId, onPlayerContact, onRescheduleMatch, onCancelBooking, onDeleteResult, viewingOwnGroup
+  match,
+  player1,
+  player2,
+  onEditResult,
+  onBookMatch,
+  isOrganizer,
+  loggedInPlayerId,
+  onPlayerContact,
+  onRescheduleMatch,
+  onCancelBooking,
+  onDeleteResult,
+  viewingOwnGroup = false
 }) => {
-  if (!player1 || !player2) return null;
-
-  const isParticipant = loggedInPlayerId === player1.id || loggedInPlayerId === player2.id;
-
-  // organizer OR (participant AND viewing own group) can manage bookings
-  const canManageBooking = isOrganizer || (isParticipant && !!viewingOwnGroup);
-  const canEnterResult = isOrganizer || (isParticipant && !!viewingOwnGroup); // only allow enter/edit results if viewing own group (or organizer)
-  const canBook = isOrganizer || (isParticipant && !!viewingOwnGroup);
-  const canDeleteResult = isOrganizer || (isParticipant && !!viewingOwnGroup);
-
-  const handleEnterResult = () => onEditResult(match);
-
-  const renderCenter = () => {
-    if (match.score1 != null && match.score2 != null) {
-      return (
-        <div className="text-2xl font-bold text-center">
-          {match.score1} — {match.score2}
-        </div>
-      );
-    }
+  if (!player1 || !player2) {
     return (
-      <div className="text-lg font-medium text-center text-text-secondary">
-        vs
+      <div className="bg-secondary p-4 rounded-lg shadow">
+        <div className="text-text-secondary">Giocatori non disponibili per questa partita.</div>
       </div>
     );
+  }
+
+  const isParticipant = !!(loggedInPlayerId && (loggedInPlayerId === player1.id || loggedInPlayerId === player2.id));
+  const canManageBooking = isOrganizer || (isParticipant && viewingOwnGroup);
+  const canEnterResult = isOrganizer || (isParticipant && viewingOwnGroup);
+  const canBook = isOrganizer || (isParticipant && viewingOwnGroup);
+  const canDeleteResult = isOrganizer || (isParticipant && viewingOwnGroup);
+
+  const handleEditResultClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // pass bounding rect so parent can position the editor near this button
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    onEditResult(match, rect);
   };
 
   return (
     <div className="bg-secondary p-4 rounded-lg shadow">
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-        {/* LEFT: player2 */}
         <div className="flex items-center gap-3 justify-start">
           <img src={player2.avatar} alt={player2.name} className="w-10 h-10 rounded-full object-cover" />
-          <button onClick={() => onPlayerContact(player2)} className="text-left font-semibold hover:underline text-text-primary cursor-pointer">{player2.name}</button>
+          <button onClick={() => onPlayerContact(player2)} className="text-left font-semibold hover:underline text-text-primary cursor-pointer">
+            {player2.name}
+          </button>
         </div>
 
-        {/* CENTER: score or vs; below date/location */}
         <div className="flex flex-col items-center">
-          {renderCenter()}
+          {match.score1 != null && match.score2 != null ? (
+            <div className="text-2xl font-bold text-center">{match.score1} — {match.score2}</div>
+          ) : (
+            <div className="text-lg font-medium text-center text-text-secondary">vs</div>
+          )}
+
           {!(match.score1 != null && match.score2 != null) && match.status === 'scheduled' && match.scheduledTime && (
             <div className="text-sm text-text-secondary mt-2 text-center">
               {new Date(match.scheduledTime).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })} — {new Date(match.scheduledTime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
@@ -78,10 +88,11 @@ const MatchCard: React.FC<{
           )}
         </div>
 
-        {/* RIGHT: player1 */}
         <div className="flex items-center gap-3 justify-end">
           <div className="text-right">
-            <button onClick={() => onPlayerContact(player1)} className="font-semibold hover:underline text-text-primary cursor-pointer">{player1.name}</button>
+            <button onClick={() => onPlayerContact(player1)} className="font-semibold hover:underline text-text-primary cursor-pointer">
+              {player1.name}
+            </button>
           </div>
           <img src={player1.avatar} alt={player1.name} className="w-10 h-10 rounded-full object-cover" />
         </div>
@@ -95,7 +106,7 @@ const MatchCard: React.FC<{
         )}
 
         {canEnterResult && (
-          <button onClick={handleEnterResult} className="bg-highlight/80 hover:bg-highlight text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
+          <button onClick={handleEditResultClick} className="bg-highlight/80 hover:bg-highlight text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
             Risultato
           </button>
         )}
@@ -133,15 +144,19 @@ const MatchList: React.FC<MatchListProps> = ({
   onRescheduleMatch,
   onCancelBooking,
   onDeleteResult,
-  viewingOwnGroup
+  viewingOwnGroup = false
 }) => {
   const [filter, setFilter] = useState<'all' | 'my'>(isOrganizer ? 'all' : 'my');
 
-  const getPlayer = (playerId: string) => players.find(p => p.id === playerId);
+  if (!group) {
+    return <p className="text-center text-text-secondary py-6">Seleziona un girone per vedere le partite.</p>;
+  }
+
+  const getPlayer = (playerId?: string) => players.find(p => p.id === playerId);
 
   const filteredMatches = (status: Match['status']) => {
     return group.matches.filter(m => {
-      const isMyMatch = loggedInPlayerId && (m.player1Id === loggedInPlayerId || m.player2Id === loggedInPlayerId);
+      const isMyMatch = !!(loggedInPlayerId && (m.player1Id === loggedInPlayerId || m.player2Id === loggedInPlayerId));
       return m.status === status && (filter === 'all' || isMyMatch);
     });
   };
@@ -165,7 +180,21 @@ const MatchList: React.FC<MatchListProps> = ({
         <h4 className="text-lg font-semibold mb-3 text-accent">Partite da Fare</h4>
         <div className="space-y-3">
           {pendingMatches.length > 0 ? pendingMatches.map(match => (
-            <MatchCard key={match.id} match={match} player1={getPlayer(match.player1Id)} player2={getPlayer(match.player2Id)} onEditResult={onEditResult} onBookMatch={onBookMatch} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact} onRescheduleMatch={onRescheduleMatch} onCancelBooking={onCancelBooking} onDeleteResult={onDeleteResult} viewingOwnGroup={viewingOwnGroup} />
+            <MatchCard
+              key={match.id}
+              match={match}
+              player1={getPlayer(match.player1Id)}
+              player2={getPlayer(match.player2Id)}
+              onEditResult={onEditResult}
+              onBookMatch={onBookMatch}
+              isOrganizer={isOrganizer}
+              loggedInPlayerId={loggedInPlayerId}
+              onPlayerContact={onPlayerContact}
+              onRescheduleMatch={onRescheduleMatch}
+              onCancelBooking={onCancelBooking}
+              onDeleteResult={onDeleteResult}
+              viewingOwnGroup={viewingOwnGroup}
+            />
           )) : <p className="text-text-secondary text-center py-4">Nessuna partita da disputare.</p>}
         </div>
       </div>
@@ -174,7 +203,21 @@ const MatchList: React.FC<MatchListProps> = ({
         <h4 className="text-lg font-semibold mb-3 text-accent">Partite Programmate</h4>
         <div className="space-y-3">
           {scheduledMatches.length > 0 ? scheduledMatches.map(match => (
-            <MatchCard key={match.id} match={match} player1={getPlayer(match.player1Id)} player2={getPlayer(match.player2Id)} onEditResult={onEditResult} onBookMatch={onBookMatch} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact} onRescheduleMatch={onRescheduleMatch} onCancelBooking={onCancelBooking} onDeleteResult={onDeleteResult} viewingOwnGroup={viewingOwnGroup} />
+            <MatchCard
+              key={match.id}
+              match={match}
+              player1={getPlayer(match.player1Id)}
+              player2={getPlayer(match.player2Id)}
+              onEditResult={onEditResult}
+              onBookMatch={onBookMatch}
+              isOrganizer={isOrganizer}
+              loggedInPlayerId={loggedInPlayerId}
+              onPlayerContact={onPlayerContact}
+              onRescheduleMatch={onRescheduleMatch}
+              onCancelBooking={onCancelBooking}
+              onDeleteResult={onDeleteResult}
+              viewingOwnGroup={viewingOwnGroup}
+            />
           )) : <p className="text-text-secondary text-center py-4">Nessuna partita programmata.</p>}
         </div>
       </div>
@@ -183,7 +226,21 @@ const MatchList: React.FC<MatchListProps> = ({
         <h4 className="text-lg font-semibold mb-3 text-accent">Partite Completate</h4>
         <div className="space-y-3">
           {completedMatches.length > 0 ? completedMatches.map(match => (
-            <MatchCard key={match.id} match={match} player1={getPlayer(match.player1Id)} player2={getPlayer(match.player2Id)} onEditResult={onEditResult} onBookMatch={onBookMatch} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact} onRescheduleMatch={onRescheduleMatch} onCancelBooking={onCancelBooking} onDeleteResult={onDeleteResult} viewingOwnGroup={viewingOwnGroup} />
+            <MatchCard
+              key={match.id}
+              match={match}
+              player1={getPlayer(match.player1Id)}
+              player2={getPlayer(match.player2Id)}
+              onEditResult={onEditResult}
+              onBookMatch={onBookMatch}
+              isOrganizer={isOrganizer}
+              loggedInPlayerId={loggedInPlayerId}
+              onPlayerContact={onPlayerContact}
+              onRescheduleMatch={onRescheduleMatch}
+              onCancelBooking={onCancelBooking}
+              onDeleteResult={onDeleteResult}
+              viewingOwnGroup={viewingOwnGroup}
+            />
           )) : <p className="text-text-secondary text-center py-4">Nessuna partita completata.</p>}
         </div>
       </div>
