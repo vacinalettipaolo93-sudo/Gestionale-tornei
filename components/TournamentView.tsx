@@ -612,6 +612,232 @@ const TournamentView: React.FC<{
           </button>
         </nav>
       </div>
+
+      {/* Toggle for users */}
+      {!isOrganizer && loggedInPlayerId && (
+        <div className="mb-4 flex items-center gap-3">
+          <label className="text-sm text-text-secondary">Visualizza altri gironi?</label>
+          <button onClick={() => setViewingOtherGroups(prev => !prev)} className="bg-tertiary/80 hover:bg-tertiary text-text-primary py-1 px-3 rounded">
+            {viewingOtherGroups ? 'Disattiva (torna al tuo girone)' : 'Mostra altri gironi (solo risultati)'}
+          </button>
+
+          {viewingOtherGroups && (
+            <select value={selectedGroupId ?? ''} onChange={e => setSelectedGroupId(e.target.value || null)} className="ml-2 bg-primary border rounded p-1">
+              <option value="">-- Scegli girone --</option>
+              {tournament.groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          )}
+        </div>
+      )}
+
+      {/* Organizer select */}
+      {isOrganizer && (
+        <div className="mb-4">
+          <label className="text-sm text-text-secondary mr-2">Seleziona girone:</label>
+          <select value={selectedGroupId ?? ''} onChange={e => setSelectedGroupId(e.target.value || null)} className="bg-primary border rounded p-1">
+            {tournament.groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      <div className="animate-fadeIn">
+        {activeTab === 'standings' && selectedGroup && (
+          <StandingsTable group={selectedGroup} players={event.players} settings={tournament.settings} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact} />
+        )}
+
+        {activeTab === 'matches' && selectedGroup && (
+          <MatchList
+            group={selectedGroup}
+            players={event.players}
+            onEditResult={handleEditResult}
+            onBookMatch={setBookingMatch}
+            isOrganizer={isOrganizer}
+            loggedInPlayerId={loggedInPlayerId}
+            onPlayerContact={onPlayerContact}
+            onRescheduleMatch={(m) => setRescheduleMatch(m)}
+            onCancelBooking={handleCancelBooking}
+            onDeleteResult={handleDeleteResult}
+            viewingOwnGroup={isViewingOwnGroup || isOrganizer}
+          />
+        )}
+
+        {activeTab === 'players' && (
+          isOrganizer ? (
+            <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={onPlayerContact} />
+          ) : (
+            <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={onPlayerContact} />
+          )
+        )}
+
+        {activeTab === 'timeSlots' && (
+          <TimeSlots
+            event={event}
+            tournament={tournament}
+            setEvents={setEvents}
+            isOrganizer={isOrganizer}
+            loggedInPlayerId={loggedInPlayerId}
+            selectedGroupId={selectedGroupId ?? undefined}
+            onSlotBook={handleSlotInitiatedBooking}
+            onRequestReschedule={(m) => setRescheduleMatch(m)}
+            onRequestCancelBooking={(m) => handleCancelBooking(m)}
+            viewingOwnGroup={isViewingOwnGroup || isOrganizer}
+          />
+        )}
+
+        {activeTab === 'playoffs' && (isOrganizer || tournament.playoffs) && (
+          <Playoffs
+            event={event}
+            tournament={tournamentForPlayoffs}
+            setEvents={setEvents}
+            isOrganizer={isOrganizer}
+            loggedInPlayerId={loggedInPlayerId}
+          />
+        )}
+
+        {activeTab === 'consolation' && (isOrganizer || tournament.consolationBracket) && (
+          <ConsolationBracket
+            event={event}
+            tournament={tournamentForConsolation}
+            setEvents={setEvents}
+            isOrganizer={isOrganizer}
+            loggedInPlayerId={loggedInPlayerId}
+          />
+        )}
+
+        {activeTab === 'groupManagement' && isOrganizer && <GroupManagement event={event} tournament={tournament} setEvents={setEvents} />}
+        {activeTab === 'settings' && isOrganizer && <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />}
+        {activeTab === 'chat' && <ChatPanel />}
+      </div>
+
+      {/* Modals (unchanged) */}
+      {bookingMatch && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Prenota Partita</h4>
+            <p className="mb-4 text-text-secondary">Seleziona uno slot orario disponibile per la partita: <br />
+              <strong className="text-text-primary">{getPlayer(bookingMatch.player1Id)?.name} vs {getPlayer(bookingMatch.player2Id)?.name}</strong>
+            </p>
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {tournament.timeSlots.filter(ts => !ts.matchId).map(ts => (
+                <button key={ts.id} onClick={() => handleBookMatch(ts)} className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg">
+                  <p>{formatDateTime(ts.time)}</p>
+                  <p className="text-sm text-text-secondary">{ts.location}</p>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end mt-6">
+              <button onClick={() => setBookingMatch(null)} className="bg-tertiary py-2 px-4 rounded-lg">Annulla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rescheduleMatch && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Cambia slot partita</h4>
+            <p className="mb-4 text-text-secondary">Scegli uno slot diverso per <strong className="text-text-primary">{getPlayer(rescheduleMatch.player1Id)?.name} vs {getPlayer(rescheduleMatch.player2Id)?.name}</strong></p>
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {tournament.timeSlots.filter(ts => !ts.matchId || ts.matchId === rescheduleMatch.id).map(ts => (
+                <button key={ts.id} onClick={() => handleRescheduleBookMatch(ts)} className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg">
+                  <p>{formatDateTime(ts.time)}</p>
+                  <p className="text-sm text-text-secondary">{ts.location}</p>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end mt-6">
+              <button onClick={() => setRescheduleMatch(null)} className="bg-tertiary py-2 px-4 rounded-lg">Annulla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bookingSlot && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Assegna partita allo slot</h4>
+            <p className="mb-4 text-text-secondary">Hai scelto lo slot: <strong className="text-text-primary">{formatDateTime(bookingSlot.time)} — {bookingSlot.location}</strong></p>
+            {(() => {
+              const playerGroup = selectedGroup ?? tournament.groups.find(g => loggedInPlayerId ? g.playerIds.includes(loggedInPlayerId) : false);
+              if (!loggedInPlayerId || !playerGroup) return <p className="text-text-secondary">Non sei iscritto a nessun girone in questo torneo.</p>;
+              const pendingMatches = playerGroup.matches.filter(m => m.status === 'pending');
+              if (pendingMatches.length === 0) return <p className="text-text-secondary">Nessuna partita pending nel tuo girone da assegnare a questo slot.</p>;
+              return (
+                <div className="max-h-60 overflow-y-auto space-y-2">
+                  {pendingMatches.map(pm => (
+                    <button key={pm.id} onClick={() => handleBookMatchWithSlot(pm)} disabled={bookingLoading} className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg">
+                      <p>{getPlayer(pm.player1Id)?.name} vs {getPlayer(pm.player2Id)?.name}</p>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+            {bookingError && <div className="text-red-400 mt-3">{bookingError}</div>}
+            <div className="flex justify-end mt-6">
+              <button onClick={() => setBookingSlot(null)} className="bg-tertiary py-2 px-4 rounded-lg">Annulla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modern, simple result banner/modal: player1 - big black score - player2 */}
+      {editingMatch && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-secondary rounded-xl shadow-2xl p-4 w-full max-w-lg border border-tertiary">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="text-sm text-text-secondary">Inserisci risultato</div>
+                <div className="font-semibold text-lg">{getPlayer(editingMatch.player1Id)?.name} <span className="text-sm text-text-secondary">vs</span> {getPlayer(editingMatch.player2Id)?.name}</div>
+              </div>
+              <button onClick={() => setEditingMatch(null)} className="text-text-secondary hover:text-red-500">Chiudi ✕</button>
+            </div>
+
+            <div className="flex items-center justify-center gap-6 py-3">
+              {/* Player 1 */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="text-sm text-text-secondary">Player 1</div>
+                <input
+                  autoFocus
+                  value={score1}
+                  onChange={e => setScore1(e.target.value.replace(/[^0-9]/g, ''))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveResult(); }}
+                  className="w-28 text-center text-black font-extrabold text-4xl border rounded p-2"
+                  inputMode="numeric"
+                  aria-label="Punteggio giocatore 1"
+                />
+                <div className="flex gap-2 mt-1">
+                  <button onClick={() => { const n = parseInt(score1 || '0', 10) || 0; setScore1(String(Math.max(0, n-1))); }} className="px-3 py-1 rounded bg-tertiary">−</button>
+                  <button onClick={() => { const n = parseInt(score1 || '0', 10) || 0; setScore1(String(n+1)); }} className="px-3 py-1 rounded bg-tertiary">+</button>
+                </div>
+              </div>
+
+              <div className="text-2xl font-bold text-text-secondary">:</div>
+
+              {/* Player 2 */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="text-sm text-text-secondary">Player 2</div>
+                <input
+                  value={score2}
+                  onChange={e => setScore2(e.target.value.replace(/[^0-9]/g, ''))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveResult(); }}
+                  className="w-28 text-center text-black font-extrabold text-4xl border rounded p-2"
+                  inputMode="numeric"
+                  aria-label="Punteggio giocatore 2"
+                />
+                <div className="flex gap-2 mt-1">
+                  <button onClick={() => { const n = parseInt(score2 || '0', 10) || 0; setScore2(String(Math.max(0, n-1))); }} className="px-3 py-1 rounded bg-tertiary">−</button>
+                  <button onClick={() => { const n = parseInt(score2 || '0', 10) || 0; setScore2(String(n+1)); }} className="px-3 py-1 rounded bg-tertiary">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={() => setEditingMatch(null)} className="bg-tertiary px-4 py-2 rounded">Annulla</button>
+              <button onClick={handleSaveResult} className="bg-highlight px-4 py-2 rounded text-white font-bold">Salva</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
