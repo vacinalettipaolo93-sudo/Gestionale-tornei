@@ -11,8 +11,10 @@ import GroupManagement from './GroupManagement';
 import TournamentSettings from './TournamentSettings';
 import Playoffs from './Playoffs';
 import ConsolationBracket from './ConsolationBracket';
-import { removeUndefined } from '../utils/removeUndefined';
-import { formatDateLongWithTime, formatDateShortWithTime } from '../utils/format';
+
+// TournamentView: visualizzazione principale del torneo.
+// NAV ordering: Classifica - Partite - Giocatori - Slot Orari - Playoff - Consolation - Gestione Gironi - Impostazioni - Chat
+// Playoff/Consolation: sempre visibili in admin (nota se non generati), lato utente solo se generati.
 
 const TournamentView: React.FC<{
   event: Event;
@@ -22,7 +24,7 @@ const TournamentView: React.FC<{
   loggedInPlayerId?: string;
   onPlayerContact: (p: Player) => void;
 }> = ({ event, tournament, setEvents, isOrganizer, loggedInPlayerId, onPlayerContact }) => {
-  const [activeTab, setActiveTab] = useState<'standings'|'matches'|'players'|'timeSlots'|'chat'|'groupManagement'|'settings'|'playoffs'|'consolation'>('standings');
+  const [activeTab, setActiveTab] = useState<'standings'|'matches'|'players'|'timeSlots'|'playoffs'|'consolation'|'groupManagement'|'settings'|'chat'>('standings');
 
   // selezione girone e modalità di visualizzazione
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(tournament.groups.length > 0 ? tournament.groups[0].id : null);
@@ -54,19 +56,49 @@ const TournamentView: React.FC<{
   const selectedGroup: Group | null = selectedGroupId ? (tournament.groups.find(g => g.id === selectedGroupId) ?? null) : null;
   const isViewingOwnGroup = !viewingOtherGroups && !!userGroupId && selectedGroupId === userGroupId;
 
-  // wrapper per aggiornare UI + Firestore (rimuove undefined prima di updateDoc)
+  // Safe date formatter to avoid "Invalid option: timeStyle" in some environments
+  const formatDateTime = (iso?: string | null) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    try {
+      return d.toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' });
+    } catch (e) {
+      return `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
+    }
+  };
+
+  // Remove undefined recursively before sending payload to Firestore
+  const cleanForFirestore = (obj: any): any => {
+    if (obj === undefined) return undefined;
+    if (obj === null) return null;
+    if (Array.isArray(obj)) {
+      const arr = obj.map(cleanForFirestore).filter(item => item !== undefined);
+      return arr;
+    }
+    if (typeof obj === 'object') {
+      const out: any = {};
+      Object.keys(obj).forEach(k => {
+        const v = cleanForFirestore(obj[k]);
+        if (v !== undefined) out[k] = v;
+      });
+      return out;
+    }
+    return obj;
+  };
+
+  // wrapper per aggiornare UI + Firestore (pulisce undefined)
   const handleUpdateEvents = async (updater: (prevEvents: Event[]) => Event[]) => {
     setEvents(updater);
     const updatedEvents = updater([event]);
     const updatedEvent = updatedEvents.find(e => e.id === event.id);
     if (updatedEvent) {
-      const payload = removeUndefined(JSON.parse(JSON.stringify(updatedEvent)));
+      const deep = JSON.parse(JSON.stringify(updatedEvent));
+      const payload = cleanForFirestore(deep);
       await updateDoc(doc(db, "events", event.id), payload);
     }
   };
 
-  // --- Booking / slot-first / reschedule / cancel / delete / update result ---
-  // (mantieni qui le tue funzioni esistenti; le ho mantenute come prima con i controlli per undefined)
+  // ---------- Booking / reschedule / cancel / result handlers (unchanged logic, with safer local updates) ----------
   const handleBookMatch = async (timeSlot: TimeSlot) => {
     if (!bookingMatch) return;
     const matchToBookId = bookingMatch.id;
@@ -112,9 +144,11 @@ const TournamentView: React.FC<{
       await runTransaction(db, async (transaction) => {
         const docSnap = await transaction.get(docRef);
         if (!docSnap.exists()) throw new Error("Evento non trovato");
+
         const currentEvent = docSnap.data() as Event;
         const tIndex = currentEvent.tournaments.findIndex(t => t.id === tournament.id);
         if (tIndex === -1) throw new Error("Torneo non trovato");
+
         const tSnapshot = currentEvent.tournaments[tIndex];
 
         const slotIndex = tSnapshot.timeSlots.findIndex(ts => ts.id === bookingSlot.id);
@@ -177,14 +211,14 @@ const TournamentView: React.FC<{
     }
   };
 
-  // Reschedule (usa direttamente la funzione esistente ma aggiungo wrapper di sicurezza)
   const handleRescheduleBookMatch = async (newSlot: TimeSlot) => {
+    // Defensive checks
     if (!rescheduleMatch) {
-      console.warn('handleRescheduleBookMatch chiamato ma rescheduleMatch è null');
+      console.warn('handleRescheduleBookMatch called but rescheduleMatch is null');
       return;
     }
     if (!newSlot) {
-      console.warn('handleRescheduleBookMatch chiamato con newSlot undefined');
+      console.warn('handleRescheduleBookMatch called with undefined newSlot');
       return;
     }
 
@@ -196,9 +230,11 @@ const TournamentView: React.FC<{
       await runTransaction(db, async (transaction) => {
         const docSnap = await transaction.get(docRef);
         if (!docSnap.exists()) throw new Error("Evento non trovato");
+
         const currentEvent = docSnap.data() as Event;
         const tIndex = currentEvent.tournaments.findIndex(t => t.id === tournament.id);
         if (tIndex === -1) throw new Error("Torneo non trovato");
+
         const tSnapshot = currentEvent.tournaments[tIndex];
 
         const prevSlotIndex = tSnapshot.timeSlots.findIndex(ts => ts.matchId === rescheduleMatch.id);
@@ -230,6 +266,7 @@ const TournamentView: React.FC<{
         transaction.update(docRef, updatedEvent);
       });
 
+      // Local update: remove previous slot refs and set new one (avoid undefined)
       await handleUpdateEvents(prevEvents => prevEvents.map(e => {
         if (e.id !== event.id) return e;
         return {
@@ -248,11 +285,19 @@ const TournamentView: React.FC<{
               ),
               groups: t.groups.map(g => ({
                 ...g,
-                matches: g.matches.map(m =>
-                  m.id === rescheduleMatch.id
-                    ? { ...m, scheduledTime: newSlot.time, location: newSlot.location, status: 'scheduled' }
-                    : m
-                ),
+                matches: g.matches.map(m => {
+                  if (m.id === rescheduleMatch.id) {
+                    const copy: any = { ...m };
+                    copy.scheduledTime = newSlot.time;
+                    copy.location = newSlot.location;
+                    copy.status = 'scheduled';
+                    // ensure no undefined properties remain
+                    if ((copy as any).score1 === undefined) delete (copy as any).score1;
+                    if ((copy as any).score2 === undefined) delete (copy as any).score2;
+                    return copy;
+                  }
+                  return m;
+                }),
               })),
             };
           }),
@@ -296,12 +341,14 @@ const TournamentView: React.FC<{
         if (groupIndex === -1) throw new Error("Girone della partita non trovato");
         const matchObj = tObj.groups[groupIndex].matches.find(m => m.id === matchToCancel.id)!;
         matchObj.status = 'pending';
-        if ('scheduledTime' in matchObj) delete (matchObj as any).scheduledTime;
-        if ('location' in matchObj) delete (matchObj as any).location;
+        // delete fields in transaction-level copy
+        delete (matchObj as any).scheduledTime;
+        delete (matchObj as any).location;
 
         transaction.update(docRef, updatedEvent);
       });
 
+      // aggiorna stato locale - delete properties instead of setting undefined
       await handleUpdateEvents(prevEvents => prevEvents.map(e => {
         if (e.id !== event.id) return e;
         return {
@@ -318,10 +365,11 @@ const TournamentView: React.FC<{
                 matches: g.matches.map(m => {
                   if (m.id === matchToCancel.id) {
                     const copy: any = { ...m };
-                    delete copy.score1;
-                    delete copy.score2;
-                    delete copy.scheduledTime;
-                    delete copy.location;
+                    // remove fields rather than setting to undefined
+                    if ('score1' in copy && copy.score1 === undefined) delete copy.score1;
+                    if ('score2' in copy && copy.score2 === undefined) delete copy.score2;
+                    if ('scheduledTime' in copy) delete copy.scheduledTime;
+                    if ('location' in copy) delete copy.location;
                     copy.status = 'pending';
                     return copy;
                   }
@@ -383,11 +431,18 @@ const TournamentView: React.FC<{
               ...t,
               groups: t.groups.map(g => ({
                 ...g,
-                matches: g.matches.map(m =>
-                  m.id === matchToDelete.id
-                    ? { ...m, status: (m.scheduledTime ? 'scheduled' : 'pending'), score1: undefined, score2: undefined }
-                    : m
-                ),
+                matches: g.matches.map(m => {
+                  if (m.id === matchToDelete.id) {
+                    const copy: any = { ...m };
+                    if (copy.scheduledTime === undefined) delete copy.scheduledTime;
+                    if (copy.location === undefined) delete copy.location;
+                    if (copy.score1 === undefined) delete copy.score1;
+                    if (copy.score2 === undefined) delete copy.score2;
+                    copy.status = (copy.scheduledTime ? 'scheduled' : 'pending');
+                    return copy;
+                  }
+                  return m;
+                }),
               })),
             };
           }),
@@ -441,40 +496,151 @@ const TournamentView: React.FC<{
 
   const getPlayer = (playerId?: string) => event.players.find(p => p.id === playerId);
 
-  // admin fallback objects
   const tournamentForPlayoffs = isOrganizer && !tournament.playoffs ? { ...tournament, playoffs: { isGenerated: false, matches: [], finalId: null, bronzeFinalId: null } as any } : tournament;
   const tournamentForConsolation = isOrganizer && !tournament.consolationBracket ? { ...tournament, consolationBracket: { isGenerated: false, matches: [], finalId: null, bronzeFinalId: null } as any } : tournament;
 
-  // SAFE opener for reschedule: prevents opening when data missing
-  const handleOpenReschedule = (m?: Match | null) => {
-    if (!m) {
-      console.warn('handleOpenReschedule: partita mancante');
-      return;
-    }
-    if (!tournament.timeSlots || tournament.timeSlots.length === 0) {
-      alert('Nessuno slot disponibile. Aggiungi prima gli slot per poter modificare la prenotazione.');
-      return;
-    }
-    setRescheduleMatch(m);
-    // attempt to scroll anchor into view is handled in MatchList/TimeSlots if needed
-  };
-
   return (
     <div>
-      {/* NAV */}
-      <div className="flex gap-2 mb-4">
-        <button onClick={() => setActiveTab('standings')} className={activeTab === 'standings' ? 'font-bold' : ''}>Classifica</button>
-        <button onClick={() => setActiveTab('matches')} className={activeTab === 'matches' ? 'font-bold' : ''}>Partite</button>
-        <button onClick={() => setActiveTab('players')} className={activeTab === 'players' ? 'font-bold' : ''}>Giocatori</button>
-        <button onClick={() => setActiveTab('timeSlots')} className={activeTab === 'timeSlots' ? 'font-bold' : ''}>Slot Orari</button>
-        <button onClick={() => setActiveTab('chat')} className={activeTab === 'chat' ? 'font-bold' : ''}>Chat</button>
-        {isOrganizer && <button onClick={() => setActiveTab('groupManagement')} className={activeTab === 'groupManagement' ? 'font-bold' : ''}>Gestione Gironi</button>}
-        {isOrganizer && <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'font-bold' : ''}>Impostazioni</button>}
-        {tournament.playoffs && <button onClick={() => setActiveTab('playoffs')} className={activeTab === 'playoffs' ? 'font-bold' : ''}>Playoffs</button>}
-        {tournament.consolationBracket && <button onClick={() => setActiveTab('consolation')} className={activeTab === 'consolation' ? 'font-bold' : ''}>Consolation</button>}
+      {/* NAV in requested order with improved styling */}
+      <div className="mb-6">
+        <nav role="tablist" aria-label="Tournament navigation" className="flex flex-wrap gap-3 items-center">
+          {/* tab button shared style */}
+          {/** Helper function inline for classes is replaced with template strings below **/}
+
+          <button
+            onClick={() => setActiveTab('standings')}
+            aria-current={activeTab === 'standings' ? 'page' : undefined}
+            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'standings' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+          >
+            Classifica
+          </button>
+
+          <button
+            onClick={() => setActiveTab('matches')}
+            aria-current={activeTab === 'matches' ? 'page' : undefined}
+            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'matches' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+          >
+            Partite
+          </button>
+
+          <button
+            onClick={() => setActiveTab('players')}
+            aria-current={activeTab === 'players' ? 'page' : undefined}
+            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'players' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+          >
+            Giocatori
+          </button>
+
+          <button
+            onClick={() => setActiveTab('timeSlots')}
+            aria-current={activeTab === 'timeSlots' ? 'page' : undefined}
+            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'timeSlots' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+          >
+            Slot Orari
+          </button>
+
+          {/* Playoffs / Consolation: admin always sees (with note), users only if generated */}
+          {isOrganizer ? (
+            <>
+              <button
+                onClick={() => setActiveTab('playoffs')}
+                aria-current={activeTab === 'playoffs' ? 'page' : undefined}
+                className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'playoffs' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+              >
+                Playoffs{!tournament.playoffs ? ' (non generato)' : ''}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('consolation')}
+                aria-current={activeTab === 'consolation' ? 'page' : undefined}
+                className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'consolation' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+              >
+                Consolation{!tournament.consolationBracket ? ' (non generato)' : ''}
+              </button>
+            </>
+          ) : (
+            <>
+              {tournament.playoffs && (
+                <button
+                  onClick={() => setActiveTab('playoffs')}
+                  aria-current={activeTab === 'playoffs' ? 'page' : undefined}
+                  className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'playoffs' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+                >
+                  Playoffs
+                </button>
+              )}
+              {tournament.consolationBracket && (
+                <button
+                  onClick={() => setActiveTab('consolation')}
+                  aria-current={activeTab === 'consolation' ? 'page' : undefined}
+                  className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'consolation' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+                >
+                  Consolation
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Admin-only controls */}
+          {isOrganizer && (
+            <>
+              <button
+                onClick={() => setActiveTab('groupManagement')}
+                aria-current={activeTab === 'groupManagement' ? 'page' : undefined}
+                className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'groupManagement' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+              >
+                Gestione Gironi
+              </button>
+
+              <button
+                onClick={() => setActiveTab('settings')}
+                aria-current={activeTab === 'settings' ? 'page' : undefined}
+                className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'settings' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+              >
+                Impostazioni
+              </button>
+            </>
+          )}
+
+          {/* Chat always last */}
+          <button
+            onClick={() => setActiveTab('chat')}
+            aria-current={activeTab === 'chat' ? 'page' : undefined}
+            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'chat' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+          >
+            Chat
+          </button>
+        </nav>
       </div>
 
-      <div className="animate-fadeIn space-y-4">
+      {/* Toggle for users */}
+      {!isOrganizer && loggedInPlayerId && (
+        <div className="mb-4 flex items-center gap-3">
+          <label className="text-sm text-text-secondary">Visualizza altri gironi?</label>
+          <button onClick={() => setViewingOtherGroups(prev => !prev)} className="bg-tertiary/80 hover:bg-tertiary text-text-primary py-1 px-3 rounded">
+            {viewingOtherGroups ? 'Disattiva (torna al tuo girone)' : 'Mostra altri gironi (solo risultati)'}
+          </button>
+
+          {viewingOtherGroups && (
+            <select value={selectedGroupId ?? ''} onChange={e => setSelectedGroupId(e.target.value || null)} className="ml-2 bg-primary border rounded p-1">
+              <option value="">-- Scegli girone --</option>
+              {tournament.groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          )}
+        </div>
+      )}
+
+      {/* Organizer select */}
+      {isOrganizer && (
+        <div className="mb-4">
+          <label className="text-sm text-text-secondary mr-2">Seleziona girone:</label>
+          <select value={selectedGroupId ?? ''} onChange={e => setSelectedGroupId(e.target.value || null)} className="bg-primary border rounded p-1">
+            {tournament.groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      <div className="animate-fadeIn">
         {activeTab === 'standings' && selectedGroup && (
           <StandingsTable group={selectedGroup} players={event.players} settings={tournament.settings} loggedInPlayerId={loggedInPlayerId} onPlayerContact={onPlayerContact} />
         )}
@@ -488,9 +654,10 @@ const TournamentView: React.FC<{
             isOrganizer={isOrganizer}
             loggedInPlayerId={loggedInPlayerId}
             onPlayerContact={onPlayerContact}
-            onRescheduleMatch={handleOpenReschedule}
+            onRescheduleMatch={(m) => setRescheduleMatch(m)}
             onCancelBooking={handleCancelBooking}
             onDeleteResult={handleDeleteResult}
+            viewingOwnGroup={isViewingOwnGroup || isOrganizer}
           />
         )}
 
@@ -511,21 +678,13 @@ const TournamentView: React.FC<{
             loggedInPlayerId={loggedInPlayerId}
             selectedGroupId={selectedGroupId ?? undefined}
             onSlotBook={handleSlotInitiatedBooking}
-            onRequestReschedule={handleOpenReschedule}
+            onRequestReschedule={(m) => setRescheduleMatch(m)}
             onRequestCancelBooking={(m) => handleCancelBooking(m)}
             viewingOwnGroup={isViewingOwnGroup || isOrganizer}
-            formatDateLongWithTime={formatDateLongWithTime}
-            formatDateShortWithTime={formatDateShortWithTime}
           />
         )}
 
-        {activeTab === 'chat' && <ChatPanel />}
-
-        {activeTab === 'groupManagement' && isOrganizer && <GroupManagement event={event} tournament={tournament} setEvents={setEvents} />}
-
-        {activeTab === 'settings' && isOrganizer && <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />}
-
-        {activeTab === 'playoffs' && tournament.playoffs && (
+        {activeTab === 'playoffs' && (isOrganizer || tournament.playoffs) && (
           <Playoffs
             event={event}
             tournament={tournamentForPlayoffs}
@@ -535,7 +694,7 @@ const TournamentView: React.FC<{
           />
         )}
 
-        {activeTab === 'consolation' && tournament.consolationBracket && (
+        {activeTab === 'consolation' && (isOrganizer || tournament.consolationBracket) && (
           <ConsolationBracket
             event={event}
             tournament={tournamentForConsolation}
@@ -544,48 +703,13 @@ const TournamentView: React.FC<{
             loggedInPlayerId={loggedInPlayerId}
           />
         )}
+
+        {activeTab === 'groupManagement' && isOrganizer && <GroupManagement event={event} tournament={tournament} setEvents={setEvents} />}
+        {activeTab === 'settings' && isOrganizer && <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />}
+        {activeTab === 'chat' && <ChatPanel />}
       </div>
 
-      {/* Reschedule modal: safe rendering using optional chaining */}
-      {rescheduleMatch && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
-            <h4 className="text-lg font-bold mb-4">Cambia slot partita</h4>
-            <p className="mb-4 text-text-secondary">
-              Scegli uno slot diverso per <strong className="text-text-primary">{getPlayer(rescheduleMatch.player1Id)?.name} vs {getPlayer(rescheduleMatch.player2Id)?.name}</strong>
-            </p>
-
-            <div className="max-h-60 overflow-y-auto space-y-2">
-              {(tournament.timeSlots || []).filter(ts => !ts.matchId || ts.matchId === rescheduleMatch?.id).map(ts => (
-                <button
-                  key={ts.id}
-                  onClick={() => {
-                    try {
-                      handleRescheduleBookMatch(ts);
-                    } catch (err) {
-                      console.error('Errore durante il reschedule click:', err);
-                      setBookingError((err as any)?.message || 'Errore durante la selezione dello slot');
-                    }
-                  }}
-                  className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg"
-                >
-                  <p>{formatDateLongWithTime(ts.time)}</p>
-                  <p className="text-sm text-text-secondary">{ts.location}</p>
-                </button>
-              ))}
-              {(tournament.timeSlots || []).length === 0 && <p className="text-text-secondary">Nessuno slot disponibile. Aggiungi slot prima di modificare le prenotazioni.</p>}
-            </div>
-
-            <div className="flex justify-end mt-6">
-              <button onClick={() => setRescheduleMatch(null)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">
-                Annulla
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modals bookingMatch, editingMatch, etc. (unchanged) */}
+      {/* Modals (unchanged) */}
       {bookingMatch && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
@@ -596,13 +720,61 @@ const TournamentView: React.FC<{
             <div className="max-h-60 overflow-y-auto space-y-2">
               {tournament.timeSlots.filter(ts => !ts.matchId).map(ts => (
                 <button key={ts.id} onClick={() => handleBookMatch(ts)} className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg">
-                  <p>{formatDateLongWithTime(ts.time)}</p>
+                  <p>{formatDateTime(ts.time)}</p>
                   <p className="text-sm text-text-secondary">{ts.location}</p>
                 </button>
               ))}
             </div>
             <div className="flex justify-end mt-6">
               <button onClick={() => setBookingMatch(null)} className="bg-tertiary py-2 px-4 rounded-lg">Annulla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rescheduleMatch && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Cambia slot partita</h4>
+            <p className="mb-4 text-text-secondary">Scegli uno slot diverso per <strong className="text-text-primary">{getPlayer(rescheduleMatch.player1Id)?.name} vs {getPlayer(rescheduleMatch.player2Id)?.name}</strong></p>
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {tournament.timeSlots.filter(ts => !ts.matchId || ts.matchId === rescheduleMatch.id).map(ts => (
+                <button key={ts.id} onClick={() => handleRescheduleBookMatch(ts)} className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg">
+                  <p>{formatDateTime(ts.time)}</p>
+                  <p className="text-sm text-text-secondary">{ts.location}</p>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end mt-6">
+              <button onClick={() => setRescheduleMatch(null)} className="bg-tertiary py-2 px-4 rounded-lg">Annulla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bookingSlot && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Assegna partita allo slot</h4>
+            <p className="mb-4 text-text-secondary">Hai scelto lo slot: <strong className="text-text-primary">{formatDateTime(bookingSlot.time)} — {bookingSlot.location}</strong></p>
+            {(() => {
+              const playerGroup = selectedGroup ?? tournament.groups.find(g => loggedInPlayerId ? g.playerIds.includes(loggedInPlayerId) : false);
+              if (!loggedInPlayerId || !playerGroup) return <p className="text-text-secondary">Non sei iscritto a nessun girone in questo torneo.</p>;
+              const pendingMatches = playerGroup.matches.filter(m => m.status === 'pending');
+              if (pendingMatches.length === 0) return <p className="text-text-secondary">Nessuna partita pending nel tuo girone da assegnare a questo slot.</p>;
+              return (
+                <div className="max-h-60 overflow-y-auto space-y-2">
+                  {pendingMatches.map(pm => (
+                    <button key={pm.id} onClick={() => handleBookMatchWithSlot(pm)} disabled={bookingLoading} className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg">
+                      <p>{getPlayer(pm.player1Id)?.name} vs {getPlayer(pm.player2Id)?.name}</p>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+            {bookingError && <div className="text-red-400 mt-3">{bookingError}</div>}
+            <div className="flex justify-end mt-6">
+              <button onClick={() => setBookingSlot(null)} className="bg-tertiary py-2 px-4 rounded-lg">Annulla</button>
             </div>
           </div>
         </div>
@@ -618,8 +790,8 @@ const TournamentView: React.FC<{
               <input value={score2} onChange={e => setScore2(e.target.value)} className="border p-2" />
             </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setEditingMatch(null)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annulla</button>
-              <button onClick={handleSaveResult} className="bg-highlight hover:bg-highlight/80 text-white font-bold py-2 px-4 rounded-lg transition-colors">Salva</button>
+              <button onClick={() => setEditingMatch(null)} className="bg-tertiary py-2 px-4 rounded-lg">Annulla</button>
+              <button onClick={handleSaveResult} className="bg-highlight text-white py-2 px-4 rounded-lg">Salva</button>
             </div>
           </div>
         </div>
