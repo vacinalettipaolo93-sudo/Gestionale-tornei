@@ -13,8 +13,8 @@ import Playoffs from './Playoffs';
 import ConsolationBracket from './ConsolationBracket';
 
 // TournamentView: visualizzazione principale del torneo.
-// NAV ordering: Classifica - Partite - Giocatori - Slot Orari - Playoff - Consolation - Gestione Gironi - Impostazioni - Chat
-// Playoff/Consolation: sempre visibili in admin (nota se non generati), lato utente solo se generati.
+// NAV ordering required: Classifica - Partite - Giocatori - Slot Orari - Playoff - Consolazione - Gestione Gironi - Impostazioni - Chat
+// Playoff/Consolation always visible in admin (with note if not generated), visible to user only if generated.
 
 const TournamentView: React.FC<{
   event: Event;
@@ -66,7 +66,7 @@ const TournamentView: React.FC<{
     }
   };
 
-  // ---------- Booking / reschedule / cancel / result handlers (unchanged logic) ----------
+  // ---------- Booking / reschedule / cancel / result handlers ----------
   const handleBookMatch = async (timeSlot: TimeSlot) => {
     if (!bookingMatch) return;
     const matchToBookId = bookingMatch.id;
@@ -112,11 +112,9 @@ const TournamentView: React.FC<{
       await runTransaction(db, async (transaction) => {
         const docSnap = await transaction.get(docRef);
         if (!docSnap.exists()) throw new Error("Evento non trovato");
-
         const currentEvent = docSnap.data() as Event;
         const tIndex = currentEvent.tournaments.findIndex(t => t.id === tournament.id);
         if (tIndex === -1) throw new Error("Torneo non trovato");
-
         const tSnapshot = currentEvent.tournaments[tIndex];
 
         const slotIndex = tSnapshot.timeSlots.findIndex(ts => ts.id === bookingSlot.id);
@@ -189,11 +187,9 @@ const TournamentView: React.FC<{
       await runTransaction(db, async (transaction) => {
         const docSnap = await transaction.get(docRef);
         if (!docSnap.exists()) throw new Error("Evento non trovato");
-
         const currentEvent = docSnap.data() as Event;
         const tIndex = currentEvent.tournaments.findIndex(t => t.id === tournament.id);
         if (tIndex === -1) throw new Error("Torneo non trovato");
-
         const tSnapshot = currentEvent.tournaments[tIndex];
 
         const prevSlotIndex = tSnapshot.timeSlots.findIndex(ts => ts.matchId === rescheduleMatch.id);
@@ -429,124 +425,46 @@ const TournamentView: React.FC<{
 
   const getPlayer = (playerId?: string) => event.players.find(p => p.id === playerId);
 
+  // fallback tournament objects for admin so Playoffs/Consolation open even if not generated
   const tournamentForPlayoffs = isOrganizer && !tournament.playoffs ? { ...tournament, playoffs: { isGenerated: false, matches: [], finalId: null, bronzeFinalId: null } as any } : tournament;
   const tournamentForConsolation = isOrganizer && !tournament.consolationBracket ? { ...tournament, consolationBracket: { isGenerated: false, matches: [], finalId: null, bronzeFinalId: null } as any } : tournament;
 
+  // ---------- RENDER ----------
   return (
     <div>
-      {/* NAV in requested order with improved styling */}
-      <div className="mb-6">
-        <nav role="tablist" aria-label="Tournament navigation" className="flex flex-wrap gap-3 items-center">
-          {/* tab button shared style */}
-          {/** Helper function inline for classes is replaced with template strings below **/}
+      {/* NAV in the requested order */}
+      <div className="flex gap-2 mb-4">
+        <button onClick={() => setActiveTab('standings')} className={activeTab === 'standings' ? 'font-bold' : ''}>Classifica</button>
+        <button onClick={() => setActiveTab('matches')} className={activeTab === 'matches' ? 'font-bold' : ''}>Partite</button>
+        <button onClick={() => setActiveTab('players')} className={activeTab === 'players' ? 'font-bold' : ''}>Giocatori</button>
+        <button onClick={() => setActiveTab('timeSlots')} className={activeTab === 'timeSlots' ? 'font-bold' : ''}>Slot Orari</button>
 
-          <button
-            onClick={() => setActiveTab('standings')}
-            aria-current={activeTab === 'standings' ? 'page' : undefined}
-            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'standings' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
-          >
-            Classifica
-          </button>
+        {/* Playoffs - Consolation: admin always sees, users only if generated */}
+        {isOrganizer ? (
+          <>
+            <button onClick={() => setActiveTab('playoffs')} className={activeTab === 'playoffs' ? 'font-bold' : ''}>
+              Playoffs{!tournament.playoffs ? ' (non generato)' : ''}
+            </button>
+            <button onClick={() => setActiveTab('consolation')} className={activeTab === 'consolation' ? 'font-bold' : ''}>
+              Consolation{!tournament.consolationBracket ? ' (non generato)' : ''}
+            </button>
+          </>
+        ) : (
+          <>
+            {tournament.playoffs && <button onClick={() => setActiveTab('playoffs')} className={activeTab === 'playoffs' ? 'font-bold' : ''}>Playoffs</button>}
+            {tournament.consolationBracket && <button onClick={() => setActiveTab('consolation')} className={activeTab === 'consolation' ? 'font-bold' : ''}>Consolation</button>}
+          </>
+        )}
 
-          <button
-            onClick={() => setActiveTab('matches')}
-            aria-current={activeTab === 'matches' ? 'page' : undefined}
-            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'matches' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
-          >
-            Partite
-          </button>
+        {/* Admin-only: Gestione Gironi e Impostazioni */}
+        {isOrganizer && <button onClick={() => setActiveTab('groupManagement')} className={activeTab === 'groupManagement' ? 'font-bold' : ''}>Gestione Gironi</button>}
+        {isOrganizer && <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'font-bold' : ''}>Impostazioni</button>}
 
-          <button
-            onClick={() => setActiveTab('players')}
-            aria-current={activeTab === 'players' ? 'page' : undefined}
-            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'players' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
-          >
-            Giocatori
-          </button>
-
-          <button
-            onClick={() => setActiveTab('timeSlots')}
-            aria-current={activeTab === 'timeSlots' ? 'page' : undefined}
-            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'timeSlots' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
-          >
-            Slot Orari
-          </button>
-
-          {/* Playoffs / Consolation: admin always sees (with note), users only if generated */}
-          {isOrganizer ? (
-            <>
-              <button
-                onClick={() => setActiveTab('playoffs')}
-                aria-current={activeTab === 'playoffs' ? 'page' : undefined}
-                className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'playoffs' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
-              >
-                Playoffs{!tournament.playoffs ? ' (non generato)' : ''}
-              </button>
-
-              <button
-                onClick={() => setActiveTab('consolation')}
-                aria-current={activeTab === 'consolation' ? 'page' : undefined}
-                className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'consolation' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
-              >
-                Consolation{!tournament.consolationBracket ? ' (non generato)' : ''}
-              </button>
-            </>
-          ) : (
-            <>
-              {tournament.playoffs && (
-                <button
-                  onClick={() => setActiveTab('playoffs')}
-                  aria-current={activeTab === 'playoffs' ? 'page' : undefined}
-                  className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'playoffs' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
-                >
-                  Playoffs
-                </button>
-              )}
-              {tournament.consolationBracket && (
-                <button
-                  onClick={() => setActiveTab('consolation')}
-                  aria-current={activeTab === 'consolation' ? 'page' : undefined}
-                  className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'consolation' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
-                >
-                  Consolation
-                </button>
-              )}
-            </>
-          )}
-
-          {/* Admin-only controls */}
-          {isOrganizer && (
-            <>
-              <button
-                onClick={() => setActiveTab('groupManagement')}
-                aria-current={activeTab === 'groupManagement' ? 'page' : undefined}
-                className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'groupManagement' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
-              >
-                Gestione Gironi
-              </button>
-
-              <button
-                onClick={() => setActiveTab('settings')}
-                aria-current={activeTab === 'settings' ? 'page' : undefined}
-                className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'settings' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
-              >
-                Impostazioni
-              </button>
-            </>
-          )}
-
-          {/* Chat always last */}
-          <button
-            onClick={() => setActiveTab('chat')}
-            aria-current={activeTab === 'chat' ? 'page' : undefined}
-            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'chat' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
-          >
-            Chat
-          </button>
-        </nav>
+        {/* Chat always last */}
+        <button onClick={() => setActiveTab('chat')} className={activeTab === 'chat' ? 'font-bold' : ''}>Chat</button>
       </div>
 
-      {/* Toggle for users */}
+      {/* Toggle for users to view other groups */}
       {!isOrganizer && loggedInPlayerId && (
         <div className="mb-4 flex items-center gap-3">
           <label className="text-sm text-text-secondary">Visualizza altri gironi?</label>
@@ -563,7 +481,7 @@ const TournamentView: React.FC<{
         </div>
       )}
 
-      {/* Organizer select */}
+      {/* Organizer: select per switchare girone */}
       {isOrganizer && (
         <div className="mb-4">
           <label className="text-sm text-text-secondary mr-2">Seleziona girone:</label>
@@ -642,7 +560,7 @@ const TournamentView: React.FC<{
         {activeTab === 'chat' && <ChatPanel />}
       </div>
 
-      {/* Modals (unchanged) */}
+      {/* --- Modals (booking/reschedule/slot-first/result) --- */}
       {bookingMatch && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
