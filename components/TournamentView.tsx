@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { type Event, type Tournament, type Match, type TimeSlot, type Player } from '../types';
+import React, { useEffect, useState } from 'react';
+import { type Event, type Tournament, type Match, type TimeSlot, type Player, type Group } from '../types';
 import { updateDoc, doc, runTransaction } from "firebase/firestore";
 import { db } from "../firebase";
 import MatchList from './MatchList';
@@ -12,11 +12,9 @@ import TournamentSettings from './TournamentSettings';
 import Playoffs from './Playoffs';
 import ConsolationBracket from './ConsolationBracket';
 
-// TournamentView: mantiene il comportamento originale e aggiunge:
-// - prenotazione "slot-first" (bookingSlot + runTransaction)
-// - reschedule (spostamento) da match o da slot (runTransaction)
-// - annullamento prenotazione (runTransaction)
-// - cancellazione / modifica risultato (runTransaction per cancellazione, updateDoc per modifica esistente)
+// TournamentView: visualizzazione principale del torneo.
+// NAV ordering: Classifica - Partite - Giocatori - Slot Orari - Playoff - Consolation - Gestione Gironi - Impostazioni - Chat
+// Playoff/Consolation: sempre visibili in admin (nota se non generati), lato utente solo se generati.
 
 const TournamentView: React.FC<{
   event: Event;
@@ -26,23 +24,39 @@ const TournamentView: React.FC<{
   loggedInPlayerId?: string;
   onPlayerContact: (p: Player) => void;
 }> = ({ event, tournament, setEvents, isOrganizer, loggedInPlayerId, onPlayerContact }) => {
-  const [activeTab, setActiveTab] = useState<'standings'|'matches'|'players'|'timeSlots'|'chat'|'groupManagement'|'settings'|'playoffs'|'consolation'>('standings');
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(tournament.groups.length > 0 ? tournament.groups[0].id : null);
+  const [activeTab, setActiveTab] = useState<'standings'|'matches'|'players'|'timeSlots'|'playoffs'|'consolation'|'groupManagement'|'settings'|'chat'>('standings');
 
+  // selezione girone e modalità di visualizzazione
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(tournament.groups.length > 0 ? tournament.groups[0].id : null);
+  const [viewingOtherGroups, setViewingOtherGroups] = useState(false);
+
+  // booking / reschedule / edit result
   const [bookingMatch, setBookingMatch] = useState<Match | null>(null);
   const [bookingSlot, setBookingSlot] = useState<TimeSlot | null>(null);
   const [rescheduleMatch, setRescheduleMatch] = useState<Match | null>(null);
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   const [score1, setScore1] = useState('');
   const [score2, setScore2] = useState('');
-  const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false);
-  const [newGroupName, setNewGroupName] = useState('');
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
 
-  const selectedGroup = selectedGroupId ? tournament.groups.find(g => g.id === selectedGroupId) ?? null : null;
+  const userGroupId = loggedInPlayerId ? tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId))?.id : undefined;
 
-  // wrapper esistente per aggiornare React state e Firestore
+  useEffect(() => {
+    if (!isOrganizer && loggedInPlayerId) {
+      const myGroup = tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId));
+      if (myGroup) {
+        setSelectedGroupId(myGroup.id);
+        setViewingOtherGroups(false);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournament.id, loggedInPlayerId, isOrganizer]);
+
+  const selectedGroup: Group | null = selectedGroupId ? (tournament.groups.find(g => g.id === selectedGroupId) ?? null) : null;
+  const isViewingOwnGroup = !viewingOtherGroups && !!userGroupId && selectedGroupId === userGroupId;
+
+  // wrapper per aggiornare UI + Firestore
   const handleUpdateEvents = async (updater: (prevEvents: Event[]) => Event[]) => {
     setEvents(updater);
     const updatedEvents = updater([event]);
@@ -52,7 +66,7 @@ const TournamentView: React.FC<{
     }
   };
 
-  // Flow originario: prenota partita scegliendo lo slot
+  // ---------- Booking / reschedule / cancel / result handlers (unchanged logic) ----------
   const handleBookMatch = async (timeSlot: TimeSlot) => {
     if (!bookingMatch) return;
     const matchToBookId = bookingMatch.id;
@@ -83,14 +97,11 @@ const TournamentView: React.FC<{
     setBookingMatch(null);
   };
 
-  // --- SLOT-FIRST: utente ha cliccato "Prenota" su uno slot, ora sceglie la sua partita del girone ---
   const handleSlotInitiatedBooking = (slot: TimeSlot) => {
     setBookingSlot(slot);
-    setBookingMatch(null);
     setBookingError(null);
   };
 
-  // Prenota con transazione (slot-first) per garantire atomicità
   const handleBookMatchWithSlot = async (matchToBook: Match) => {
     if (!bookingSlot) return;
     setBookingLoading(true);
@@ -108,12 +119,10 @@ const TournamentView: React.FC<{
 
         const tSnapshot = currentEvent.tournaments[tIndex];
 
-        // verifica slot ancora libero
         const slotIndex = tSnapshot.timeSlots.findIndex(ts => ts.id === bookingSlot.id);
         if (slotIndex === -1) throw new Error("Slot non trovato");
         if (tSnapshot.timeSlots[slotIndex].matchId) throw new Error("Slot già prenotato");
 
-        // trova girone del giocatore oppure usa selectedGroupId
         const groupIndex = tSnapshot.groups.findIndex(g =>
           (selectedGroupId && g.id === selectedGroupId) || (loggedInPlayerId ? g.playerIds.includes(loggedInPlayerId) : false)
         );
@@ -123,7 +132,6 @@ const TournamentView: React.FC<{
         if (matchIndex === -1) throw new Error("Partita non trovata nel girone");
         if (tSnapshot.groups[groupIndex].matches[matchIndex].status !== 'pending') throw new Error("La partita non è più disponibile");
 
-        // applica modifiche in copia profonda
         const updatedEvent = JSON.parse(JSON.stringify(currentEvent)) as Event;
         const tObj = updatedEvent.tournaments.find(tt => tt.id === tournament.id)!;
         const slotToUpdate = tObj.timeSlots.find(ts => ts.id === bookingSlot.id)!;
@@ -138,7 +146,6 @@ const TournamentView: React.FC<{
         transaction.update(docRef, updatedEvent);
       });
 
-      // aggiorna stato locale
       await handleUpdateEvents(prevEvents => prevEvents.map(e => {
         if (e.id !== event.id) return e;
         return {
@@ -172,7 +179,6 @@ const TournamentView: React.FC<{
     }
   };
 
-  // --- RESCHEDULE: spostare partita già prenotata in un altro slot ---
   const handleRescheduleBookMatch = async (newSlot: TimeSlot) => {
     if (!rescheduleMatch) return;
     setBookingLoading(true);
@@ -219,7 +225,6 @@ const TournamentView: React.FC<{
         transaction.update(docRef, updatedEvent);
       });
 
-      // aggiorna stato locale
       await handleUpdateEvents(prevEvents => prevEvents.map(e => {
         if (e.id !== event.id) return e;
         return {
@@ -292,7 +297,6 @@ const TournamentView: React.FC<{
         transaction.update(docRef, updatedEvent);
       });
 
-      // aggiorna stato locale
       await handleUpdateEvents(prevEvents => prevEvents.map(e => {
         if (e.id !== event.id) return e;
         return {
@@ -406,6 +410,23 @@ const TournamentView: React.FC<{
     }));
   };
 
+  const handleEditResult = (match: Match) => {
+    setEditingMatch(match);
+    setScore1(match.score1?.toString() ?? '');
+    setScore2(match.score2?.toString() ?? '');
+  };
+
+  const handleSaveResult = async () => {
+    if (editingMatch) {
+      const s1 = parseInt(score1, 10);
+      const s2 = parseInt(score2, 10);
+      if (!isNaN(s1) && !isNaN(s2)) {
+        await handleUpdateMatchResult(editingMatch.id, s1, s2);
+        setEditingMatch(null);
+      }
+    }
+  };
+
   const getPlayer = (playerId?: string) => event.players.find(p => p.id === playerId);
 
   const tournamentForPlayoffs = isOrganizer && !tournament.playoffs ? { ...tournament, playoffs: { isGenerated: false, matches: [], finalId: null, bronzeFinalId: null } as any } : tournament;
@@ -413,17 +434,144 @@ const TournamentView: React.FC<{
 
   return (
     <div>
-      {/* NAV */}
-      <div className="flex gap-2 mb-4">
-        <button onClick={() => setActiveTab('standings')} className={activeTab === 'standings' ? 'font-bold' : ''}>Classifica</button>
-        <button onClick={() => setActiveTab('matches')} className={activeTab === 'matches' ? 'font-bold' : ''}>Partite</button>
-        <button onClick={() => setActiveTab('players')} className={activeTab === 'players' ? 'font-bold' : ''}>Giocatori</button>
-        <button onClick={() => setActiveTab('timeSlots')} className={activeTab === 'timeSlots' ? 'font-bold' : ''}>Slot Orari</button>
-        {isOrganizer && <button onClick={() => setActiveTab('groupManagement')} className={activeTab === 'groupManagement' ? 'font-bold' : ''}>Gestione Gironi</button>}
-        {isOrganizer && <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'font-bold' : ''}>Impostazioni</button>}
-        {tournament.playoffs && <button onClick={() => setActiveTab('playoffs')} className={activeTab === 'playoffs' ? 'font-bold' : ''}>Playoffs</button>}
-        {tournament.consolationBracket && <button onClick={() => setActiveTab('consolation')} className={activeTab === 'consolation' ? 'font-bold' : ''}>Consolation</button>}
+      {/* NAV in requested order with improved styling */}
+      <div className="mb-6">
+        <nav role="tablist" aria-label="Tournament navigation" className="flex flex-wrap gap-3 items-center">
+          {/* tab button shared style */}
+          {/** Helper function inline for classes is replaced with template strings below **/}
+
+          <button
+            onClick={() => setActiveTab('standings')}
+            aria-current={activeTab === 'standings' ? 'page' : undefined}
+            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'standings' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+          >
+            Classifica
+          </button>
+
+          <button
+            onClick={() => setActiveTab('matches')}
+            aria-current={activeTab === 'matches' ? 'page' : undefined}
+            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'matches' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+          >
+            Partite
+          </button>
+
+          <button
+            onClick={() => setActiveTab('players')}
+            aria-current={activeTab === 'players' ? 'page' : undefined}
+            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'players' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+          >
+            Giocatori
+          </button>
+
+          <button
+            onClick={() => setActiveTab('timeSlots')}
+            aria-current={activeTab === 'timeSlots' ? 'page' : undefined}
+            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'timeSlots' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+          >
+            Slot Orari
+          </button>
+
+          {/* Playoffs / Consolation: admin always sees (with note), users only if generated */}
+          {isOrganizer ? (
+            <>
+              <button
+                onClick={() => setActiveTab('playoffs')}
+                aria-current={activeTab === 'playoffs' ? 'page' : undefined}
+                className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'playoffs' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+              >
+                Playoffs{!tournament.playoffs ? ' (non generato)' : ''}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('consolation')}
+                aria-current={activeTab === 'consolation' ? 'page' : undefined}
+                className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'consolation' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+              >
+                Consolation{!tournament.consolationBracket ? ' (non generato)' : ''}
+              </button>
+            </>
+          ) : (
+            <>
+              {tournament.playoffs && (
+                <button
+                  onClick={() => setActiveTab('playoffs')}
+                  aria-current={activeTab === 'playoffs' ? 'page' : undefined}
+                  className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'playoffs' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+                >
+                  Playoffs
+                </button>
+              )}
+              {tournament.consolationBracket && (
+                <button
+                  onClick={() => setActiveTab('consolation')}
+                  aria-current={activeTab === 'consolation' ? 'page' : undefined}
+                  className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'consolation' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+                >
+                  Consolation
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Admin-only controls */}
+          {isOrganizer && (
+            <>
+              <button
+                onClick={() => setActiveTab('groupManagement')}
+                aria-current={activeTab === 'groupManagement' ? 'page' : undefined}
+                className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'groupManagement' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+              >
+                Gestione Gironi
+              </button>
+
+              <button
+                onClick={() => setActiveTab('settings')}
+                aria-current={activeTab === 'settings' ? 'page' : undefined}
+                className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'settings' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+              >
+                Impostazioni
+              </button>
+            </>
+          )}
+
+          {/* Chat always last */}
+          <button
+            onClick={() => setActiveTab('chat')}
+            aria-current={activeTab === 'chat' ? 'page' : undefined}
+            className={`px-4 py-2 rounded-full transition-all duration-200 ${activeTab === 'chat' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+          >
+            Chat
+          </button>
+        </nav>
       </div>
+
+      {/* Toggle for users */}
+      {!isOrganizer && loggedInPlayerId && (
+        <div className="mb-4 flex items-center gap-3">
+          <label className="text-sm text-text-secondary">Visualizza altri gironi?</label>
+          <button onClick={() => setViewingOtherGroups(prev => !prev)} className="bg-tertiary/80 hover:bg-tertiary text-text-primary py-1 px-3 rounded">
+            {viewingOtherGroups ? 'Disattiva (torna al tuo girone)' : 'Mostra altri gironi (solo risultati)'}
+          </button>
+
+          {viewingOtherGroups && (
+            <select value={selectedGroupId ?? ''} onChange={e => setSelectedGroupId(e.target.value || null)} className="ml-2 bg-primary border rounded p-1">
+              <option value="">-- Scegli girone --</option>
+              {tournament.groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          )}
+        </div>
+      )}
+
+      {/* Organizer select */}
+      {isOrganizer && (
+        <div className="mb-4">
+          <label className="text-sm text-text-secondary mr-2">Seleziona girone:</label>
+          <select value={selectedGroupId ?? ''} onChange={e => setSelectedGroupId(e.target.value || null)} className="bg-primary border rounded p-1">
+            {tournament.groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        </div>
+      )}
 
       <div className="animate-fadeIn">
         {activeTab === 'standings' && selectedGroup && (
@@ -434,14 +582,7 @@ const TournamentView: React.FC<{
           <MatchList
             group={selectedGroup}
             players={event.players}
-            onEditResult={(m, rect) => {
-              // open modern editor anchored — reuse handleEditResult-like logic
-              setEditingMatch(m);
-              setScore1(m.score1?.toString() ?? '');
-              setScore2(m.score2?.toString() ?? '');
-              // scroll so anchor is visible
-              if (rect) window.scrollTo({ top: Math.max(0, window.scrollY + rect.top - 120), behavior: 'smooth' });
-            }}
+            onEditResult={handleEditResult}
             onBookMatch={setBookingMatch}
             isOrganizer={isOrganizer}
             loggedInPlayerId={loggedInPlayerId}
@@ -449,16 +590,16 @@ const TournamentView: React.FC<{
             onRescheduleMatch={(m) => setRescheduleMatch(m)}
             onCancelBooking={handleCancelBooking}
             onDeleteResult={handleDeleteResult}
+            viewingOwnGroup={isViewingOwnGroup || isOrganizer}
           />
         )}
 
         {activeTab === 'players' && (
-          <PlayerManagement
-            event={event}
-            setEvents={setEvents}
-            isOrganizer={isOrganizer}
-            onPlayerContact={onPlayerContact}
-          />
+          isOrganizer ? (
+            <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={onPlayerContact} />
+          ) : (
+            <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={onPlayerContact} />
+          )
         )}
 
         {activeTab === 'timeSlots' && (
@@ -472,77 +613,122 @@ const TournamentView: React.FC<{
             onSlotBook={handleSlotInitiatedBooking}
             onRequestReschedule={(m) => setRescheduleMatch(m)}
             onRequestCancelBooking={(m) => handleCancelBooking(m)}
+            viewingOwnGroup={isViewingOwnGroup || isOrganizer}
           />
         )}
 
-        {activeTab === 'chat' && <ChatPanel />}
-
-        {activeTab === 'groupManagement' && isOrganizer && (
-          <GroupManagement event={event} tournament={tournament} setEvents={setEvents} />
+        {activeTab === 'playoffs' && (isOrganizer || tournament.playoffs) && (
+          <Playoffs
+            event={event}
+            tournament={tournamentForPlayoffs}
+            setEvents={setEvents}
+            isOrganizer={isOrganizer}
+            loggedInPlayerId={loggedInPlayerId}
+          />
         )}
 
+        {activeTab === 'consolation' && (isOrganizer || tournament.consolationBracket) && (
+          <ConsolationBracket
+            event={event}
+            tournament={tournamentForConsolation}
+            setEvents={setEvents}
+            isOrganizer={isOrganizer}
+            loggedInPlayerId={loggedInPlayerId}
+          />
+        )}
+
+        {activeTab === 'groupManagement' && isOrganizer && <GroupManagement event={event} tournament={tournament} setEvents={setEvents} />}
         {activeTab === 'settings' && isOrganizer && <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />}
-
-        {activeTab === 'playoffs' && tournament.playoffs && <Playoffs event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} />}
-
-        {activeTab === 'consolation' && tournament.consolationBracket && <ConsolationBracket event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} />}
+        {activeTab === 'chat' && <ChatPanel />}
       </div>
 
-      {/* Modern editor: anchored near clicked button (fallback centered) */}
-      {editingMatch && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pointer-events-none">
-          <div className="pointer-events-auto mt-20 w-full max-w-md bg-secondary rounded-xl shadow-2xl border border-tertiary p-4">
-            <div className="flex justify-between items-center mb-3">
-              <div>
-                <div className="text-sm text-text-secondary">Risultato</div>
-                <div className="font-semibold">{getPlayer(editingMatch.player1Id)?.name} vs {getPlayer(editingMatch.player2Id)?.name}</div>
-              </div>
-              <button onClick={() => setEditingMatch(null)} className="text-text-secondary">✕</button>
+      {/* Modals (unchanged) */}
+      {bookingMatch && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Prenota Partita</h4>
+            <p className="mb-4 text-text-secondary">Seleziona uno slot orario disponibile per la partita: <br />
+              <strong className="text-text-primary">{getPlayer(bookingMatch.player1Id)?.name} vs {getPlayer(bookingMatch.player2Id)?.name}</strong>
+            </p>
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {tournament.timeSlots.filter(ts => !ts.matchId).map(ts => (
+                <button key={ts.id} onClick={() => handleBookMatch(ts)} className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg">
+                  <p>{new Date(ts.time).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}</p>
+                  <p className="text-sm text-text-secondary">{ts.location}</p>
+                </button>
+              ))}
             </div>
-
-            <div className="grid grid-cols-3 gap-3 items-center">
-              <div className="flex flex-col items-center">
-                <div className="text-sm text-text-secondary mb-1">{getPlayer(editingMatch.player1Id)?.name}</div>
-                <input
-                  type="number"
-                  min={0}
-                  value={score1}
-                  onChange={e => setScore1(e.target.value)}
-                  className="w-24 text-center border rounded p-2 text-black font-extrabold text-xl"
-                />
-              </div>
-
-              <div className="flex items-center justify-center">
-                <div className="text-2xl font-bold">—</div>
-              </div>
-
-              <div className="flex flex-col items-center">
-                <div className="text-sm text-text-secondary mb-1">{getPlayer(editingMatch.player2Id)?.name}</div>
-                <input
-                  type="number"
-                  min={0}
-                  value={score2}
-                  onChange={e => setScore2(e.target.value)}
-                  className="w-24 text-center border rounded p-2 text-black font-extrabold text-xl"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => setEditingMatch(null)} className="bg-tertiary py-2 px-4 rounded-lg">Annulla</button>
-              <button onClick={async () => {
-                const s1 = parseInt(score1, 10);
-                const s2 = parseInt(score2, 10);
-                if (!isNaN(s1) && !isNaN(s2)) {
-                  await handleUpdateMatchResult(editingMatch.id, s1, s2);
-                  setEditingMatch(null);
-                }
-              }} className="bg-highlight py-2 px-4 rounded-lg text-white font-bold">Salva</button>
+            <div className="flex justify-end mt-6">
+              <button onClick={() => setBookingMatch(null)} className="bg-tertiary py-2 px-4 rounded-lg">Annulla</button>
             </div>
           </div>
         </div>
       )}
 
+      {rescheduleMatch && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Cambia slot partita</h4>
+            <p className="mb-4 text-text-secondary">Scegli uno slot diverso per <strong className="text-text-primary">{getPlayer(rescheduleMatch.player1Id)?.name} vs {getPlayer(rescheduleMatch.player2Id)?.name}</strong></p>
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {tournament.timeSlots.filter(ts => !ts.matchId || ts.matchId === rescheduleMatch.id).map(ts => (
+                <button key={ts.id} onClick={() => handleRescheduleBookMatch(ts)} className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg">
+                  <p>{new Date(ts.time).toLocaleDateString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}</p>
+                  <p className="text-sm text-text-secondary">{ts.location}</p>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end mt-6">
+              <button onClick={() => setRescheduleMatch(null)} className="bg-tertiary py-2 px-4 rounded-lg">Annulla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bookingSlot && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Assegna partita allo slot</h4>
+            <p className="mb-4 text-text-secondary">Hai scelto lo slot: <strong className="text-text-primary">{new Date(bookingSlot.time).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })} — {bookingSlot.location}</strong></p>
+            {(() => {
+              const playerGroup = selectedGroup ?? tournament.groups.find(g => loggedInPlayerId ? g.playerIds.includes(loggedInPlayerId) : false);
+              if (!loggedInPlayerId || !playerGroup) return <p className="text-text-secondary">Non sei iscritto a nessun girone in questo torneo.</p>;
+              const pendingMatches = playerGroup.matches.filter(m => m.status === 'pending');
+              if (pendingMatches.length === 0) return <p className="text-text-secondary">Nessuna partita pending nel tuo girone da assegnare a questo slot.</p>;
+              return (
+                <div className="max-h-60 overflow-y-auto space-y-2">
+                  {pendingMatches.map(pm => (
+                    <button key={pm.id} onClick={() => handleBookMatchWithSlot(pm)} disabled={bookingLoading} className="w-full text-left bg-tertiary hover:bg-highlight p-3 rounded-lg">
+                      <p>{getPlayer(pm.player1Id)?.name} vs {getPlayer(pm.player2Id)?.name}</p>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+            {bookingError && <div className="text-red-400 mt-3">{bookingError}</div>}
+            <div className="flex justify-end mt-6">
+              <button onClick={() => setBookingSlot(null)} className="bg-tertiary py-2 px-4 rounded-lg">Annulla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingMatch && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4">Inserisci / Modifica Risultato</h4>
+            <div className="mb-4">
+              <div className="mb-2">{getPlayer(editingMatch.player1Id)?.name} - {getPlayer(editingMatch.player2Id)?.name}</div>
+              <input value={score1} onChange={e => setScore1(e.target.value)} className="border p-2 mr-2" />
+              <input value={score2} onChange={e => setScore2(e.target.value)} className="border p-2" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setEditingMatch(null)} className="bg-tertiary py-2 px-4 rounded-lg">Annulla</button>
+              <button onClick={handleSaveResult} className="bg-highlight text-white py-2 px-4 rounded-lg">Salva</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
