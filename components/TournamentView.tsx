@@ -780,18 +780,60 @@ const TournamentView: React.FC<{
         </div>
       )}
 
+      {/* Modern, simple result banner/modal: player1 - big black score - player2 */}
       {editingMatch && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
-            <h4 className="text-lg font-bold mb-4">Inserisci / Modifica Risultato</h4>
-            <div className="mb-4">
-              <div className="mb-2">{getPlayer(editingMatch.player1Id)?.name} - {getPlayer(editingMatch.player2Id)?.name}</div>
-              <input value={score1} onChange={e => setScore1(e.target.value)} className="border p-2 mr-2" />
-              <input value={score2} onChange={e => setScore2(e.target.value)} className="border p-2" />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-secondary rounded-xl shadow-2xl p-4 w-full max-w-lg border border-tertiary">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="text-sm text-text-secondary">Inserisci risultato</div>
+                <div className="font-semibold text-lg">{getPlayer(editingMatch.player1Id)?.name} <span className="text-sm text-text-secondary">vs</span> {getPlayer(editingMatch.player2Id)?.name}</div>
+              </div>
+              <button onClick={() => setEditingMatch(null)} className="text-text-secondary hover:text-red-500">Chiudi ✕</button>
             </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setEditingMatch(null)} className="bg-tertiary py-2 px-4 rounded-lg">Annulla</button>
-              <button onClick={handleSaveResult} className="bg-highlight text-white py-2 px-4 rounded-lg">Salva</button>
+
+            <div className="flex items-center justify-center gap-6 py-3">
+              {/* Player 1 */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="text-sm text-text-secondary">Player 1</div>
+                <input
+                  autoFocus
+                  value={score1}
+                  onChange={e => setScore1(e.target.value.replace(/[^0-9]/g, ''))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveResult(); }}
+                  className="w-28 text-center text-black font-extrabold text-4xl border rounded p-2"
+                  inputMode="numeric"
+                  aria-label="Punteggio giocatore 1"
+                />
+                <div className="flex gap-2 mt-1">
+                  <button onClick={() => { const n = parseInt(score1 || '0', 10) || 0; setScore1(String(Math.max(0, n-1))); }} className="px-3 py-1 rounded bg-tertiary">−</button>
+                  <button onClick={() => { const n = parseInt(score1 || '0', 10) || 0; setScore1(String(n+1)); }} className="px-3 py-1 rounded bg-tertiary">+</button>
+                </div>
+              </div>
+
+              <div className="text-2xl font-bold text-text-secondary">:</div>
+
+              {/* Player 2 */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="text-sm text-text-secondary">Player 2</div>
+                <input
+                  value={score2}
+                  onChange={e => setScore2(e.target.value.replace(/[^0-9]/g, ''))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveResult(); }}
+                  className="w-28 text-center text-black font-extrabold text-4xl border rounded p-2"
+                  inputMode="numeric"
+                  aria-label="Punteggio giocatore 2"
+                />
+                <div className="flex gap-2 mt-1">
+                  <button onClick={() => { const n = parseInt(score2 || '0', 10) || 0; setScore2(String(Math.max(0, n-1))); }} className="px-3 py-1 rounded bg-tertiary">−</button>
+                  <button onClick={() => { const n = parseInt(score2 || '0', 10) || 0; setScore2(String(n+1)); }} className="px-3 py-1 rounded bg-tertiary">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={() => setEditingMatch(null)} className="bg-tertiary px-4 py-2 rounded">Annulla</button>
+              <button onClick={handleSaveResult} className="bg-highlight px-4 py-2 rounded text-white font-bold">Salva</button>
             </div>
           </div>
         </div>
