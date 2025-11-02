@@ -10,7 +10,7 @@ interface ParticipantDashboardProps {
 
 const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ events, playerId, onSelectEvent }) => {
   const myEvents = events.filter(event => 
-    event.players.some(p => p.id === playerId && p.status === 'confirmed')
+    Array.isArray(event.players) && event.players.some(p => p.id === playerId && p.status === 'confirmed')
   );
 
   const getPlayerStats = (event: Event) => {
@@ -21,20 +21,25 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ events, pla
     let completionPercentage = 0;
     let tournamentName = '';
 
-    const tournament = event.tournaments.find(t => 
-      t.groups.some(g => g.playerIds.includes(playerId))
-    );
+    const tournament = Array.isArray(event.tournaments)
+      ? event.tournaments.find(t => Array.isArray(t.groups) && t.groups.some(g => Array.isArray(g.playerIds) && g.playerIds.includes(playerId)))
+      : undefined;
+
     if (tournament) {
       tournamentName = tournament.name;
-      const group = tournament.groups.find(g => g.playerIds.includes(playerId));
+      const group = Array.isArray(tournament.groups)
+        ? tournament.groups.find(g => Array.isArray(g.playerIds) && g.playerIds.includes(playerId))
+        : undefined;
       if (group) {
         const standings = calculateStandings(group, event.players, tournament.settings);
         const myStanding = standings.findIndex(s => s.playerId === playerId);
         if (myStanding !== -1) {
           position = `${myStanding + 1}°`;
         }
-        
-        const myMatches = group.matches.filter(m => m.player1Id === playerId || m.player2Id === playerId);
+
+        const myMatches = Array.isArray(group.matches)
+          ? group.matches.filter(m => m.player1Id === playerId || m.player2Id === playerId)
+          : [];
         totalMatches = myMatches.length;
         played = myMatches.filter(m => m.status === 'completed').length;
         toPlay = totalMatches - played;
@@ -72,18 +77,14 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ events, pla
                                     </div>
                                      <div>
                                         <div className="text-2xl font-bold">{stats.toPlay}</div>
-                                        <div className="text-xs text-text-secondary">Mancanti</div>
+                                        <div className="text-xs text-text-secondary">Da giocare</div>
                                     </div>
                                 </div>
-                                <div className="mt-4 pt-4 border-t border-tertiary/50">
-                                    <div className="flex justify-between items-center text-sm mb-1">
-                                        <span className="text-text-secondary">Mio Progresso</span>
-                                        <span className="font-semibold text-text-primary">{stats.played} / {stats.totalMatches} partite</span>
+                                <div className="mt-2">
+                                    <div className="w-full bg-tertiary/30 h-2 rounded-full">
+                                        <div className="bg-accent h-2 rounded-full transition-all duration-300" style={{ width: `${stats.completionPercentage}%` }}></div>
                                     </div>
-                                    <div className="w-full bg-tertiary/50 rounded-full h-2.5">
-                                        <div className="bg-gradient-to-r from-accent to-highlight h-2.5 rounded-full transition-all duration-500" style={{ width: `${stats.completionPercentage}%` }}></div>
-                                    </div>
-                                    <div className="text-right text-xs text-text-secondary mt-1">{stats.completionPercentage}% Completato</div>
+                                    <div className="text-xs text-text-secondary mt-1 text-right">{stats.completionPercentage}% Completato</div>
                                 </div>
                             </div>
                         </div>
@@ -91,9 +92,7 @@ const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({ events, pla
                 })}
             </div>
         ) : (
-            <div className="text-center py-10 bg-secondary rounded-xl">
-                <p className="text-text-secondary">Non sei ancora iscritto a nessun evento.</p>
-            </div>
+            <p className="text-text-secondary text-center py-8">Nessun evento trovato.</p>
         )}
     </div>
   );
