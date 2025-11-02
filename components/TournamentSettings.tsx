@@ -68,9 +68,12 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
         setSettings(prev => ({...prev, tieBreakers: newTieBreakers}));
     };
 
+    // PATCH: safe access to groups and playerIds
     const handlePlayoffSettingChange = (groupId: string, value: string) => {
         const num = parseInt(value, 10) || 0;
-        const groupPlayerCount = tournament.groups?.find(g => g.id === groupId)?.playerIds?.length ?? 0;
+        const groupPlayerCount = Array.isArray(tournament.groups)
+            ? tournament.groups.find(g => g.id === groupId)?.playerIds?.length ?? 0
+            : 0;
         if (num > groupPlayerCount) return;
 
         setSettings(prev => {
@@ -85,6 +88,7 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
         });
     };
 
+    // PATCH: safe access to groups and playerIds
     const handleConsolationSettingChange = (groupId: string, field: 'startRank' | 'endRank', value: string) => {
         const num = parseInt(value, 10) || 0;
         
