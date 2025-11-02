@@ -7,10 +7,6 @@ interface Props {
   onPlayerContact?: (p: Player) => void;
 }
 
-/*
-  Mostra SOLO i giocatori appartenenti al grupo passato.
-  Utilissimo per la view 'players' lato utente: evita di mostrare tutti gli iscritti dell'app.
-*/
 const GroupPlayers: React.FC<Props> = ({ group, players, onPlayerContact }) => {
   const groupPlayers = group?.playerIds?.map(pid => players.find(p => p.id === pid)).filter(Boolean) as Player[] ?? [];
 
