@@ -1,0 +1,5 @@
+{
+  "name": "Tournament Manager Pro",
+  "description": "A web application for organizers to create and manage self-run sports competitions. Participants can schedule matches, enter results, and communicate, with standings updated automatically.",
+  "requestFramePermissions": []
+}
