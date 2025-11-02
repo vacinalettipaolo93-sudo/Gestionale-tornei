@@ -25,13 +25,14 @@ const TournamentView: React.FC<TournamentViewProps> = ({
   const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'players' | 'timeSlots' | 'playoffs' | 'consolation' | 'groups' | 'settings' | 'chat'>('standings');
 
   // Slot globali se esistono, fallback a quelli torneo
-  const slotsToShow = event.globalTimeSlots && event.globalTimeSlots.length > 0
+  const slotsToShow = Array.isArray(event.globalTimeSlots) && event.globalTimeSlots.length > 0
     ? event.globalTimeSlots
     : tournament.timeSlots;
 
   return (
     <div>
       <div className="flex gap-2 mb-6">
+        {/* ...tab navigator invariato... */}
         <button
           onClick={() => setActiveTab('standings')}
           className={`px-4 py-2 rounded-full ${activeTab === 'standings' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
