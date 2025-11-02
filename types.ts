@@ -84,7 +84,7 @@ export interface Event {
   tournaments: Tournament[];
   players: Player[];
   invitationCode: string;
-  globalTimeSlots?: TimeSlot[]; // <-- AGGIUNTO
+  globalTimeSlots?: TimeSlot[];
 }
 
 export interface StandingsEntry {
