@@ -70,7 +70,7 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
 
     const handlePlayoffSettingChange = (groupId: string, value: string) => {
         const num = parseInt(value, 10) || 0;
-        const groupPlayerCount = tournament.groups.find(g => g.id === groupId)?.playerIds.length ?? 0;
+        const groupPlayerCount = tournament.groups?.find(g => g.id === groupId)?.playerIds?.length ?? 0;
         if (num > groupPlayerCount) return;
 
         setSettings(prev => {
@@ -106,7 +106,6 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Aggiorna React state
         setEvents(prevEvents => prevEvents.map(ev => 
             ev.id === event.id ? {
                 ...ev,
@@ -115,7 +114,6 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
                 )
             } : ev
         ));
-        // Aggiorna Firestore
         await updateDoc(doc(db, "events", event.id), {
             tournaments: event.tournaments.map(t =>
                 t.id === tournament.id ? { ...t, settings } : t
@@ -207,7 +205,7 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
                             </label>
                         </div>
                         <p className="text-sm text-text-secondary pt-2 border-t border-tertiary/50">Specifica quanti giocatori si qualificano da ogni girone.</p>
-                        {tournament.groups.map(group => (
+                        {Array.isArray(tournament.groups) && tournament.groups.map(group => (
                             <div key={group.id} className="flex items-center justify-between">
                                 <label htmlFor={`qualifiers-${group.id}`} className="font-medium">{group.name}</label>
                                 <select 
@@ -216,11 +214,11 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
                                     onChange={(e) => handlePlayoffSettingChange(group.id, e.target.value)}
                                     className="w-24 bg-tertiary border border-tertiary/50 rounded-lg p-2 text-text-primary focus:ring-2 focus:ring-accent"
                                 >
-                                    {[...Array((group.playerIds.length || 0) + 1).keys()].map(i => <option key={i} value={i}>{i}</option>)}
+                                    {[...Array((Array.isArray(group.playerIds) ? group.playerIds.length : 0) + 1).keys()].map(i => <option key={i} value={i}>{i}</option>)}
                                 </select>
                             </div>
                         ))}
-                         {tournament.groups.length === 0 && <p className="text-text-secondary">Crea prima i gironi.</p>}
+                         {(!Array.isArray(tournament.groups) || tournament.groups.length === 0) && <p className="text-text-secondary">Crea prima i gironi.</p>}
                      </div>
                 </div>
 
@@ -229,11 +227,11 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
                      <h4 className="text-lg font-semibold mb-3 text-text-primary">Impostazioni Tabellone di Consolazione</h4>
                      <div className="space-y-3 bg-primary/50 p-4 rounded-lg max-w-sm">
                         <p className="text-sm text-text-secondary">Specifica quali giocatori si qualificano (es. dal 4° al 5° posto).</p>
-                         {tournament.groups.map(group => {
+                         {Array.isArray(tournament.groups) && tournament.groups.map(group => {
                             const groupSetting = settings.consolationSettings.find(s => s.groupId === group.id);
                             const startRank = groupSetting?.startRank ?? 0;
                             const endRank = groupSetting?.endRank ?? 0;
-                            const ranks = [...Array((group.playerIds.length || 0) + 1).keys()];
+                            const ranks = [...Array((Array.isArray(group.playerIds) ? group.playerIds.length : 0) + 1).keys()];
 
                             return (
                                 <div key={group.id} className="flex items-center justify-between gap-2">
@@ -261,7 +259,7 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
                                 </div>
                             )
                         })}
-                         {tournament.groups.length === 0 && <p className="text-text-secondary">Crea prima i gironi.</p>}
+                         {(!Array.isArray(tournament.groups) || tournament.groups.length === 0) && <p className="text-text-secondary">Crea prima i gironi.</p>}
                      </div>
                 </div>
 
