@@ -3,14 +3,14 @@ import { type Group, type Player, type StandingsEntry, type TournamentSettings }
 export const calculateStandings = (group: Group, players: Player[], settings: TournamentSettings): StandingsEntry[] => {
   const standingsMap: { [key: string]: StandingsEntry } = {};
 
-  group.playerIds.forEach(playerId => {
+  (Array.isArray(group.playerIds) ? group.playerIds : []).forEach(playerId => {
     standingsMap[playerId] = {
       playerId, played: 0, wins: 0, draws: 0, losses: 0, points: 0,
       goalsFor: 0, goalsAgainst: 0, goalDifference: 0
     };
   });
 
-  group.matches.forEach(match => {
+  (Array.isArray(group.matches) ? group.matches : []).forEach(match => {
     if (match.status !== 'completed' || match.score1 === null || match.score2 === null) return;
 
     const { player1Id, player2Id, score1, score2 } = match;
@@ -61,7 +61,7 @@ export const calculateStandings = (group: Group, players: Player[], settings: To
         let comparison = 0;
         switch (tieBreaker) {
             case 'headToHead':
-                const match = group.matches.find(m =>
+                const match = (Array.isArray(group.matches) ? group.matches : []).find(m =>
                     m.status === 'completed' &&
                     ((m.player1Id === a.playerId && m.player2Id === b.playerId) ||
                      (m.player1Id === b.playerId && m.player2Id === a.playerId))
@@ -86,9 +86,6 @@ export const calculateStandings = (group: Group, players: Player[], settings: To
         }
         if (comparison !== 0) return comparison;
     }
-
-    const playerA = players.find(p => p.id === a.playerId);
-    const playerB = players.find(p => p.id === b.playerId);
-    return playerA?.name.localeCompare(playerB?.name || '') || 0;
+    return 0;
   });
 };
