@@ -17,7 +17,7 @@ const EventView: React.FC<EventViewProps> = ({ event, onSelectTournament, setEve
   const [newTournamentName, setNewTournamentName] = useState('');
   const [tournamentToDelete, setTournamentToDelete] = useState<Tournament | null>(null);
 
-  // AGGIUNTA: gestisci slot globali
+  // Gestione slot globali
   const handleAddGlobalSlot = async (slot: TimeSlot) => {
     const updatedSlots = [...(event.globalTimeSlots ?? []), slot].sort((a,b) => new Date(a.time).getTime() - new Date(b.time).getTime());
     setEvents(prev =>
@@ -63,7 +63,6 @@ const EventView: React.FC<EventViewProps> = ({ event, onSelectTournament, setEve
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {event.tournaments.map(tournament => (
                 <div key={tournament.id} className="bg-primary p-4 rounded-lg shadow-md flex flex-col gap-2">
-                  {/* Info torneo: gironi, progress, partite, ecc. */}
                   <div className="flex justify-between items-center mb-2">
                     <span className="font-bold text-white">{tournament.name}</span>
                     {isOrganizer && (
@@ -73,7 +72,6 @@ const EventView: React.FC<EventViewProps> = ({ event, onSelectTournament, setEve
                       </button>
                     )}
                   </div>
-                  {/* Qui puoi aggiungere info su gironi/partite se vuoi */}
                   <button
                     className="bg-accent/70 hover:bg-accent text-white py-2 px-4 rounded-lg font-bold transition-colors"
                     onClick={() => onSelectTournament(tournament)}
@@ -91,22 +89,15 @@ const EventView: React.FC<EventViewProps> = ({ event, onSelectTournament, setEve
         <div className="mt-12">
           <TimeSlots
             event={event}
-            tournament={undefined as any} // slot globali non sono legati ad un torneo
+            tournament={undefined as any}
             setEvents={setEvents}
             isOrganizer={isOrganizer}
-            loggedInPlayerId={undefined}
-            selectedGroupId={undefined}
-            onSlotBook={undefined}
-            onRequestReschedule={undefined}
-            onRequestCancelBooking={undefined}
-            viewingOwnGroup={false}
-            isGlobal // <-- aggiungi questa prop per distinguere i global slot
+            globalTimeSlots={event.globalTimeSlots ?? []}
             handleAddGlobalSlot={handleAddGlobalSlot}
             handleDeleteGlobalSlot={handleDeleteGlobalSlot}
-            globalTimeSlots={event.globalTimeSlots ?? []}
           />
         </div>
-        {/* ...modali gestione torneo invariati... */}
+        {/* ...modali invariati... */}
         {isModalOpen && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
             <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-sm border border-tertiary">
@@ -153,7 +144,6 @@ const EventView: React.FC<EventViewProps> = ({ event, onSelectTournament, setEve
             </div>
           </div>
         )}
-        {/* Modale elimina torneo */}
         {tournamentToDelete && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
             <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
