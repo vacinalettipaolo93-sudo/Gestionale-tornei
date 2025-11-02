@@ -59,7 +59,7 @@ const EventView: React.FC<EventViewProps> = ({ event, onSelectTournament, setEve
         {/* Lista Tornei */}
         <div className="mt-8">
           <h3 className="text-xl font-bold mb-4 text-accent">Tornei</h3>
-          {event.tournaments.length > 0 ? (
+          {Array.isArray(event.tournaments) && event.tournaments.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {event.tournaments.map(tournament => (
                 <div key={tournament.id} className="bg-primary p-4 rounded-lg shadow-md flex flex-col gap-2">
@@ -89,15 +89,14 @@ const EventView: React.FC<EventViewProps> = ({ event, onSelectTournament, setEve
         <div className="mt-12">
           <TimeSlots
             event={event}
-            tournament={undefined as any}
+            tournament={event.tournaments?.[0] ?? {} as Tournament} // Passa un torneo valido per sicurezza
             setEvents={setEvents}
             isOrganizer={isOrganizer}
             globalTimeSlots={event.globalTimeSlots ?? []}
-            handleAddGlobalSlot={handleAddGlobalSlot}
-            handleDeleteGlobalSlot={handleDeleteGlobalSlot}
           />
         </div>
         {/* ...modali invariati... */}
+        {/* Modali gestione torneo invariati */}
         {isModalOpen && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
             <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-sm border border-tertiary">
@@ -115,7 +114,7 @@ const EventView: React.FC<EventViewProps> = ({ event, onSelectTournament, setEve
                     playoffs: null,
                     consolationBracket: null
                   };
-                  const updatedTournaments = [...event.tournaments, newTournament];
+                  const updatedTournaments = [...(event.tournaments ?? []), newTournament];
                   setEvents(prevEvents => prevEvents.map(ev => ev.id === event.id ? { ...ev, tournaments: updatedTournaments } : ev));
                   await updateDoc(doc(db, "events", event.id), { tournaments: updatedTournaments });
                   setNewTournamentName('');
@@ -154,7 +153,7 @@ const EventView: React.FC<EventViewProps> = ({ event, onSelectTournament, setEve
                   className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annulla</button>
                 <button onClick={
                   async () => {
-                    const updatedTournaments = event.tournaments.filter(t => t.id !== tournamentToDelete.id);
+                    const updatedTournaments = (event.tournaments ?? []).filter(t => t.id !== tournamentToDelete.id);
                     setEvents(prevEvents => prevEvents.map(ev => ev.id === event.id ? { ...ev, tournaments: updatedTournaments } : ev));
                     await updateDoc(doc(db, "events", event.id), { tournaments: updatedTournaments });
                     setTournamentToDelete(null);
