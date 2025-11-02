@@ -91,8 +91,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
 
     // Funzione per prenotare uno slot (utente)
     const handleBookSlot = async (slot: TimeSlot) => {
-        // Logica di prenotazione: aggiorna slot con matchId o utente, a seconda della tua struttura
-        // Potresti dover adattare questa funzione in base a come gestisci le prenotazioni (matchId, userId, ecc.)
         alert(`Slot prenotato: ${new Date(slot.time).toLocaleString('it-IT')} - ${slot.location}`);
         // TODO: implementa la tua logica di booking qui, aggiornando Firestore e UI
     };
