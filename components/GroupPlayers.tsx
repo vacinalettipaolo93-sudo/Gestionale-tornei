@@ -3,12 +3,14 @@ import { type Group, type Player } from '../types';
 
 interface Props {
   group?: Group;
-  players: Player[]; // lista completa dell'evento, la filtriamo per il gruppo
+  players: Player[];
   onPlayerContact?: (p: Player) => void;
 }
 
 const GroupPlayers: React.FC<Props> = ({ group, players, onPlayerContact }) => {
-  const groupPlayers = group?.playerIds?.map(pid => players.find(p => p.id === pid)).filter(Boolean) as Player[] ?? [];
+  const groupPlayers = Array.isArray(group?.playerIds)
+    ? group.playerIds.map(pid => players.find(p => p.id === pid)).filter(Boolean) as Player[]
+    : [];
 
   if (groupPlayers.length === 0) {
     return <p className="text-text-secondary">Nessun giocatore nel girone.</p>;
