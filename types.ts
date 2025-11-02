@@ -61,14 +61,11 @@ export interface TimeSlot {
     matchId: string | null;
 }
 
-// AGGIUNTA: slot orari globali a livello evento
-export interface Event {
-  id: string;
-  name: string;
-  tournaments: Tournament[];
-  players: Player[];
-  invitationCode: string;
-  globalTimeSlots?: TimeSlot[];
+export interface PlayoffBracket {
+  matches: PlayoffMatch[];
+  isGenerated: boolean;
+  finalId: string | null;
+  bronzeFinalId: string | null;
 }
 
 export interface Tournament {
@@ -76,9 +73,36 @@ export interface Tournament {
   name: string;
   groups: Group[];
   settings: TournamentSettings;
-  timeSlots: TimeSlot[]; // legacy, per retrocompatibilità: ora si usano globalTimeSlots
+  timeSlots: TimeSlot[];
   playoffs: PlayoffBracket | null;
   consolationBracket: PlayoffBracket | null;
 }
 
-// Altri tipi invariati...
+export interface Event {
+  id: string;
+  name: string;
+  tournaments: Tournament[];
+  players: Player[];
+  invitationCode: string;
+  globalTimeSlots?: TimeSlot[]; // <-- AGGIUNTO
+}
+
+export interface StandingsEntry {
+    playerId: string;
+    played: number;
+    wins: number;
+    draws: number;
+    losses: number;
+    points: number;
+    goalsFor: number;
+    goalsAgainst: number;
+    goalDifference: number;
+}
+
+export interface User {
+    id: string;
+    username: string;
+    password: string;
+    role: 'organizer' | 'participant';
+    playerId?: string;
+}
