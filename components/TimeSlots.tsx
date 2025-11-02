@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { type Event, type Tournament, type TimeSlot, type Match } from '../types';
+import { type Event, type Tournament, type TimeSlot } from '../types';
 import { TrashIcon } from './Icons';
 import { db } from "../firebase";
 import { updateDoc, doc } from "firebase/firestore";
@@ -27,9 +27,9 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
     const [newLocation, setNewLocation] = useState('');
 
     // Usa slot globali se presenti, altrimenti quelli torneo
-    const slotsToShow = globalTimeSlots && globalTimeSlots.length > 0
+    const slotsToShow = Array.isArray(globalTimeSlots) && globalTimeSlots.length > 0
         ? globalTimeSlots
-        : tournament.timeSlots;
+        : Array.isArray(tournament?.timeSlots) ? tournament.timeSlots : [];
 
     // Solo admin può aggiungere slot globali
     const handleAddSlot = async (e: React.FormEvent) => {
@@ -41,7 +41,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             location: newLocation.trim(),
             matchId: null
         };
-        if (globalTimeSlots && globalTimeSlots.length > 0) {
+        if (Array.isArray(globalTimeSlots) && globalTimeSlots.length > 0) {
             // Slot globali
             const updatedSlots = [...globalTimeSlots, newSlot].sort((a,b) => new Date(a.time).getTime() - new Date(b.time).getTime());
             setEvents(prev =>
@@ -50,7 +50,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             await updateDoc(doc(db, "events", event.id), {
               globalTimeSlots: updatedSlots
             });
-        } else {
+        } else if (Array.isArray(tournament?.timeSlots)) {
             // Slot torneo (retrocompatibilità)
             const updatedTimeSlots = [...tournament.timeSlots, newSlot].sort((a,b) => new Date(a.time).getTime() - new Date(b.time).getTime());
             setEvents(prev => prev.map(ev => ev.id === event.id ? {
@@ -67,7 +67,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
 
     // Solo admin può cancellare slot
     const handleDeleteSlot = async (slotId: string) => {
-        if (globalTimeSlots && globalTimeSlots.length > 0) {
+        if (Array.isArray(globalTimeSlots) && globalTimeSlots.length > 0) {
             const updatedSlots = globalTimeSlots.filter(ts => ts.id !== slotId);
             setEvents(prev =>
               prev.map(ev => ev.id === event.id ? { ...ev, globalTimeSlots: updatedSlots } : ev)
@@ -75,7 +75,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             await updateDoc(doc(db, "events", event.id), {
               globalTimeSlots: updatedSlots
             });
-        } else {
+        } else if (Array.isArray(tournament?.timeSlots)) {
             const updatedTimeSlots = tournament.timeSlots.filter(ts => ts.id !== slotId);
             setEvents(prev => prev.map(ev => ev.id === event.id ? {
                 ...ev,
