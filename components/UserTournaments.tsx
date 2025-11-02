@@ -2,15 +2,11 @@ import React from 'react';
 import { type Event, type Tournament } from '../types';
 
 interface Props {
-  events: Event[]; // tutti gli eventi caricati dall'app
+  events: Event[];
   loggedInPlayerId?: string;
   onOpenTournament: (event: Event, tournament: Tournament, selectedGroupId?: string) => void;
 }
 
-/*
-  Mostra solo i tornei a cui l'utente è iscritto.
-  Un utente è considerato "iscritto" a un torneo se è in uno dei gruppi del torneo.
-*/
 const UserTournaments: React.FC<Props> = ({ events, loggedInPlayerId, onOpenTournament }) => {
   if (!loggedInPlayerId) return <p className="text-text-secondary">Effettua il login per vedere i tuoi tornei.</p>;
 
@@ -18,7 +14,9 @@ const UserTournaments: React.FC<Props> = ({ events, loggedInPlayerId, onOpenTour
 
   for (const ev of events) {
     for (const t of ev.tournaments) {
-      const myGroup = t.groups.find(g => g.playerIds.includes(loggedInPlayerId));
+      const myGroup = Array.isArray(t.groups)
+        ? t.groups.find(g => Array.isArray(g.playerIds) && g.playerIds.includes(loggedInPlayerId))
+        : undefined;
       if (myGroup) {
         myTournaments.push({ event: ev, tournament: t, myGroupId: myGroup.id });
       }
@@ -38,7 +36,7 @@ const UserTournaments: React.FC<Props> = ({ events, loggedInPlayerId, onOpenTour
               {tournament.name} <span className="text-sm text-text-secondary">({event.name})</span>
               {myGroupId && <span className="ml-3 inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded">Tuo torneo</span>}
             </div>
-            {myGroupId ? <div className="text-sm text-text-secondary">Il tuo girone: <strong>{tournament.groups.find(g => g.id === myGroupId)?.name ?? '-'}</strong></div> : null}
+            {myGroupId ? <div className="text-sm text-text-secondary">Il tuo girone: <strong>{Array.isArray(tournament.groups) ? tournament.groups.find(g => g.id === myGroupId)?.name ?? '-' : '-'}</strong></div> : null}
           </div>
           <div className="flex gap-2">
             <button onClick={() => onOpenTournament(event, tournament, myGroupId)} className="bg-highlight text-white py-1 px-3 rounded">Entra</button>
