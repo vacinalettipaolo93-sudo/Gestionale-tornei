@@ -6,20 +6,11 @@ import { updateDoc, doc } from "firebase/firestore";
 
 interface TimeSlotsProps {
     event: Event;
-    tournament?: Tournament;
+    tournament: Tournament;
     setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
     isOrganizer: boolean;
     loggedInPlayerId?: string;
     selectedGroupId?: string;
-    onSlotBook?: (slot: TimeSlot) => void;
-    onRequestReschedule?: (match: Match) => void;
-    onRequestCancelBooking?: (match: Match) => void;
-    viewingOwnGroup?: boolean; // true se l'utente sta guardando il proprio girone
-
-    // AGGIUNTI per global slot
-    isGlobal?: boolean;
-    handleAddGlobalSlot?: (slot: TimeSlot) => void;
-    handleDeleteGlobalSlot?: (slotId: string) => void;
     globalTimeSlots?: TimeSlot[];
 }
 
@@ -30,59 +21,66 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
     isOrganizer,
     loggedInPlayerId,
     selectedGroupId,
-    onSlotBook,
-    onRequestReschedule,
-    onRequestCancelBooking,
-    viewingOwnGroup,
-    isGlobal = false,
-    handleAddGlobalSlot,
-    handleDeleteGlobalSlot,
-    globalTimeSlots
+    globalTimeSlots,
 }) => {
     const [newTime, setNewTime] = useState('');
     const [newLocation, setNewLocation] = useState('');
 
-    // AGGIUNTA: gestisci slot globali
+    // Usa slot globali se presenti, altrimenti quelli torneo
+    const slotsToShow = globalTimeSlots && globalTimeSlots.length > 0
+        ? globalTimeSlots
+        : tournament.timeSlots;
+
+    // Solo admin può aggiungere slot globali
     const handleAddSlot = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newTime.trim() || !newLocation.trim()) return;
-
         const newSlot: TimeSlot = {
             id: `ts${Date.now()}`,
             time: new Date(newTime).toISOString(),
             location: newLocation.trim(),
             matchId: null
         };
-
-        if (isGlobal && handleAddGlobalSlot) {
-            await handleAddGlobalSlot(newSlot);
-        } else if (tournament) {
+        if (globalTimeSlots && globalTimeSlots.length > 0) {
+            // Slot globali
+            const updatedSlots = [...globalTimeSlots, newSlot].sort((a,b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+            setEvents(prev =>
+              prev.map(ev => ev.id === event.id ? { ...ev, globalTimeSlots: updatedSlots } : ev)
+            );
+            await updateDoc(doc(db, "events", event.id), {
+              globalTimeSlots: updatedSlots
+            });
+        } else {
+            // Slot torneo (retrocompatibilità)
             const updatedTimeSlots = [...tournament.timeSlots, newSlot].sort((a,b) => new Date(a.time).getTime() - new Date(b.time).getTime());
             setEvents(prev => prev.map(ev => ev.id === event.id ? {
                 ...ev,
                 tournaments: ev.tournaments.map(t => t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t)
             } : ev));
-
             await updateDoc(doc(db, "events", event.id), {
                 tournaments: event.tournaments.map(t =>
                     t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t
                 )
             });
         }
-        // do NOT clear inputs: admin wants them preserved for faster additions
     };
 
-    // AGGIUNTA: gestisci slot globali
+    // Solo admin può cancellare slot
     const handleDeleteSlot = async (slotId: string) => {
-        if (isGlobal && handleDeleteGlobalSlot) {
-            await handleDeleteGlobalSlot(slotId);
-        } else if (tournament) {
+        if (globalTimeSlots && globalTimeSlots.length > 0) {
+            const updatedSlots = globalTimeSlots.filter(ts => ts.id !== slotId);
+            setEvents(prev =>
+              prev.map(ev => ev.id === event.id ? { ...ev, globalTimeSlots: updatedSlots } : ev)
+            );
+            await updateDoc(doc(db, "events", event.id), {
+              globalTimeSlots: updatedSlots
+            });
+        } else {
             const updatedTimeSlots = tournament.timeSlots.filter(ts => ts.id !== slotId);
             setEvents(prev => prev.map(ev => ev.id === event.id ? {
                 ...ev,
                 tournaments: ev.tournaments.map(t => t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t)
             } : ev));
-
             await updateDoc(doc(db, "events", event.id), {
                 tournaments: event.tournaments.map(t =>
                     t.id === tournament.id ? { ...t, timeSlots: updatedTimeSlots } : t
@@ -91,16 +89,19 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
         }
     };
 
-    // ...funzioni match invariati...
-
-    // Scegli la fonte slot: globali o torneo
-    const slotsToShow = isGlobal ? globalTimeSlots ?? [] : (tournament?.timeSlots ?? []);
+    // Funzione per prenotare uno slot (utente)
+    const handleBookSlot = async (slot: TimeSlot) => {
+        // Logica di prenotazione: aggiorna slot con matchId o utente, a seconda della tua struttura
+        // Potresti dover adattare questa funzione in base a come gestisci le prenotazioni (matchId, userId, ecc.)
+        alert(`Slot prenotato: ${new Date(slot.time).toLocaleString('it-IT')} - ${slot.location}`);
+        // TODO: implementa la tua logica di booking qui, aggiornando Firestore e UI
+    };
 
     return (
         <div className="space-y-6">
             {isOrganizer && (
                 <div className="bg-secondary p-6 rounded-xl shadow-lg">
-                    <h3 className="text-xl font-bold mb-4 text-accent">{isGlobal ? "Aggiungi Slot Orario (Globali)" : "Aggiungi Slot Orario"}</h3>
+                    <h3 className="text-xl font-bold mb-4 text-accent">Aggiungi Slot Orario</h3>
                     <form onSubmit={handleAddSlot} className="flex flex-col sm:flex-row gap-3">
                         <input
                             type="datetime-local"
@@ -129,25 +130,26 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             <div className="bg-secondary p-6 rounded-xl shadow-lg">
                 <h3 className="text-xl font-bold mb-4 text-accent">Slot Disponibili</h3>
                 <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                    {slotsToShow.length > 0 ? slotsToShow.map(slot => {
-                        // ...visualizzazione invariata...
-                        // Sostituisci tutte le funzioni che usano tournament.timeSlots con slotsToShow
-                        return (
+                    {slotsToShow.length > 0 ? slotsToShow.map(slot => (
                         <div key={slot.id} className={`p-3 rounded-lg flex flex-col justify-between items-stretch ${slot.matchId ? 'bg-primary/50' : 'bg-green-500/10 border border-green-500/30'}`}>
                             <div className="mb-2">
                               <p className="font-semibold text-center">{new Date(slot.time).toLocaleString('it-IT', { dateStyle: 'long', timeStyle: 'short' })}</p>
                               <p className="text-sm text-text-secondary text-center">{slot.location}</p>
                             </div>
-                            {/* ...resto come prima... */}
                             <div className="flex items-center justify-center gap-3">
-                                {isOrganizer && (
-                                    <button onClick={() => handleDeleteSlot(slot.id)} className="text-text-secondary/50 hover:text-red-500 transition-colors">
-                                        <TrashIcon className="w-5 h-5"/>
-                                    </button>
-                                )}
+                              {isOrganizer && (
+                                <button onClick={() => handleDeleteSlot(slot.id)} className="text-text-secondary/50 hover:text-red-500 transition-colors">
+                                    <TrashIcon className="w-5 h-5"/>
+                                </button>
+                              )}
+                              {!slot.matchId && !isOrganizer && (
+                                <button onClick={() => handleBookSlot(slot)} className="bg-accent/80 hover:bg-accent text-primary font-bold py-2 px-3 rounded-lg text-sm transition-colors">
+                                    Prenota
+                                </button>
+                              )}
                             </div>
                         </div>
-                    )}) : <p className="text-text-secondary text-center py-4">Nessuno slot orario creato.</p>}
+                    )) : <p className="text-text-secondary text-center py-4">Nessuno slot orario creato.</p>}
                 </div>
             </div>
         </div>
