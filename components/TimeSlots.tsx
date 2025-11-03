@@ -70,7 +70,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
     // PRENDE slot prenotati in tutto l'evento
     const bookedSlotsData = getBookedSlotsData(event);
     const availableSlots = globalTimeSlots.filter(slot => !bookedSlotsData[slot.id]);
-    const bookedSlots = globalTimeSlots.filter(slot => !!bookedSlotsData[slot.id]);
 
     const handleAddSlot = async () => {
       setSlotError("");
@@ -188,39 +187,38 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             </ul>
           )}
         </div>
-        {/* BOX SLOT PRENOTATI - Lista AGGIORNATA DA Firestore */}
+        {/* SLOT PRENOTATI */}
         <div className="bg-[#212737] rounded-xl shadow-lg p-5 mb-6 w-full max-w-xl">
           <h4 className="font-bold text-[#3AF2C5] text-lg mb-3">Slot prenotati</h4>
-          {
-            Object.keys(bookedSlotsData).length === 0 ? (
-              <p className="text-gray-400 font-bold">Nessuno slot prenotato.</p>
-            ) : (
-              <ul className="space-y-2">
-                {
-                  Object.entries(bookedSlotsData)
-                    .map(([slotId, { match, group, tournament }]) => {
-                      // Trova slot info
-                      const slot = globalTimeSlots.find(s => s.id === slotId);
-                      if (!slot) return null;
-                      return (
-                        <li key={slot.id} className="flex flex-col px-2 py-2 rounded bg-[#22283A]">
-                          <span className="font-bold text-white">
-                            {formatDateTime(slot.start)} - {slot.location} - {slot.field}
-                          </span>
-                          <span className="font-bold text-accent">
-                            Partita prenotata:
-                          </span>
-                          <span className="text-white font-bold">
-                            {match.player1Id} vs {match.player2Id}
-                            {" "}({tournament.name}, girone: {group.name})
-                          </span>
-                        </li>
-                      );
-                    })
-                }
-              </ul>
-            )
-          }
+          {Object.keys(bookedSlotsData).length === 0 ? (
+            <p className="text-gray-400 font-bold">Nessuno slot prenotato.</p>
+          ) : (
+            <ul className="space-y-2">
+              {Object.entries(bookedSlotsData).map(([slotId, { match, group, tournament }]) => {
+                const slot = globalTimeSlots.find(s => s.id === slotId);
+                if (!slot) return null;
+                const player1 = event.players.find(p => p.id === match.player1Id)?.name || match.player1Id;
+                const player2 = event.players.find(p => p.id === match.player2Id)?.name || match.player2Id;
+                return (
+                  <li key={slot.id} className="flex flex-col px-2 py-2 rounded bg-[#22283A] mb-2">
+                    <span className="font-bold text-white">
+                      {formatDateTime(slot.start)} - {slot.location} - {slot.field}
+                    </span>
+                    <span className="font-bold text-accent">
+                      Partita assegnata:
+                    </span>
+                    <span className="text-white font-bold">
+                      {player1} vs {player2}
+                      {" "}({tournament.name}, girone: {group.name})
+                    </span>
+                    <span className="text-sm text-gray-300">
+                      Stato: {match.status === "completed" ? "Completata" : "Prenotata"}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </div>
     );
@@ -229,6 +227,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
   // ================================
   // 2. Prenotazione slot inside torneo/girone (resto invariato)
   // ================================
+
   const myPendingMatches: Match[] = tournament?.groups
     ? tournament.groups.flatMap(g =>
         g.matches.filter(m =>
