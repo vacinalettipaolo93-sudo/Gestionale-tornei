@@ -108,6 +108,7 @@ const EventView: React.FC<EventViewProps> = ({
             selectedGroupId={undefined}
             globalTimeSlots={event.globalTimeSlots}
           />
+          {/* Slot prenotate rimossa come richiesto */}
         </div>
       )}
 
