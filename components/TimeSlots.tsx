@@ -67,9 +67,13 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
   // 1. HOMEPAGE SEZIONE "Slot Orari Globali"
   // ===============================
   if (!tournament) {
+    // PRENDE slot prenotati in tutto l'evento
     const bookedSlotsData = getBookedSlotsData(event);
     const availableSlots = globalTimeSlots.filter(slot => !bookedSlotsData[slot.id]);
     const bookedSlots = globalTimeSlots.filter(slot => !!bookedSlotsData[slot.id]);
+
+    // PATCH: Mostra tutte le slot prenotate dagli utenti in tempo reale!
+    // In bookedSlotsData sono tutte le slot globali prenotate nell'evento da qualsiasi torneo/girone
 
     const handleAddSlot = async () => {
       setSlotError("");
@@ -190,29 +194,38 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
         {/* BOX SLOT PRENOTATI */}
         <div className="bg-[#212737] rounded-xl shadow-lg p-5 mb-6 w-full max-w-xl">
           <h4 className="font-bold text-[#3AF2C5] text-lg mb-3">Slot prenotati</h4>
-          {bookedSlots.length === 0 ? (
-            <p className="text-gray-400 font-bold">Nessuno slot prenotato.</p>
-          ) : (
-            <ul className="space-y-2">
-              {bookedSlots.map(slot => {
-                const booking = bookedSlotsData[slot.id];
-                return (
-                  <li key={slot.id} className="flex flex-col px-2 py-2 rounded bg-[#22283A]">
-                    <span className="font-bold text-white">
-                      {formatDateTime(slot.start)} - {slot.location} - {slot.field}
-                    </span>
-                    <span className="font-bold text-accent">
-                      Partita prenotata:
-                    </span>
-                    <span className="text-white font-bold">
-                      {booking?.match.player1Id} vs {booking?.match.player2Id}
-                      {" "}({booking?.tournament?.name}, girone: {booking?.group?.name})
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          {/* PATCH: Mostra TUTTI GLI SLOT prenotati da tornei/gironi */}
+          {
+            // Array di slot globali che sono prenotati da QUALSIASI torneo/girone/partita
+            Object.keys(bookedSlotsData).length === 0 ? (
+              <p className="text-gray-400 font-bold">Nessuno slot prenotato.</p>
+            ) : (
+              <ul className="space-y-2">
+                {
+                  Object.entries(bookedSlotsData)
+                    .map(([slotId, { match, group, tournament }]) => {
+                      // Trova slot info
+                      const slot = globalTimeSlots.find(s => s.id === slotId);
+                      if (!slot) return null;
+                      return (
+                        <li key={slot.id} className="flex flex-col px-2 py-2 rounded bg-[#22283A]">
+                          <span className="font-bold text-white">
+                            {formatDateTime(slot.start)} - {slot.location} - {slot.field}
+                          </span>
+                          <span className="font-bold text-accent">
+                            Partita prenotata:
+                          </span>
+                          <span className="text-white font-bold">
+                            {match.player1Id} vs {match.player2Id}
+                            {" "}({tournament.name}, girone: {group.name})
+                          </span>
+                        </li>
+                      );
+                    })
+                }
+              </ul>
+            )
+          }
         </div>
       </div>
     );
