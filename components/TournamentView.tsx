@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { type Event, type Tournament, type Match, type TimeSlot } from '../types';
-import TimeSlots from './TimeSlots';
 import StandingsTable from './StandingsTable';
 import MatchList from './MatchList';
 import ParticipantsTab from './ParticipantsTab';
@@ -30,7 +29,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
   );
   const selectedGroup = tournament.groups.find(g => g.id === selectedGroupId);
 
-  const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'participants' | 'timeSlots' | 'playoffs' | 'consolation' | 'groups' | 'settings' | 'rules' | 'players'>('standings');
+  const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'participants' | 'playoffs' | 'consolation' | 'groups' | 'settings' | 'rules' | 'players'>('standings');
 
   // Stati modali
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
@@ -283,24 +282,23 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     <div>
       {/* Tabs menu */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {/* ... tab menu invariato ... */}
-        <button onClick={() => setActiveTab('standings')} className={`px-4 py-2 rounded-full ${activeTab === 'standings' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}>Classifica</button>
-        <button onClick={() => setActiveTab('matches')} className={`px-4 py-2 rounded-full ${activeTab === 'matches' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}>Partite</button>
+        <button onClick={() => setActiveTab('standings')} className={`px-4 py-2 rounded-full ${activeTab === 'standings' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-text-secondary hover:bg-tertiary'}`}>Classifica</button>
+        <button onClick={() => setActiveTab('matches')} className={`px-4 py-2 rounded-full ${activeTab === 'matches' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-text-secondary hover:bg-tertiary'}`}>Partite</button>
         {!isOrganizer && (
-          <button onClick={() => setActiveTab('participants')} className={`px-4 py-2 rounded-full ${activeTab === 'participants' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}>Partecipanti</button>
+          <button onClick={() => setActiveTab('participants')} className={`px-4 py-2 rounded-full ${activeTab === 'participants' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-text-secondary hover:bg-tertiary'}`}>Partecipanti</button>
         )}
-        <button onClick={() => setActiveTab('timeSlots')} className={`px-4 py-2 rounded-full ${activeTab === 'timeSlots' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}>Slot Orari</button>
-        <button onClick={() => setActiveTab('playoffs')} className={`px-4 py-2 rounded-full ${activeTab === 'playoffs' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}>Playoff</button>
-        <button onClick={() => setActiveTab('consolation')} className={`px-4 py-2 rounded-full ${activeTab === 'consolation' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}>Consolation</button>
+        {/* SLOT ORARI rimossa */}
+        <button onClick={() => setActiveTab('playoffs')} className={`px-4 py-2 rounded-full ${activeTab === 'playoffs' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-text-secondary hover:bg-tertiary'}`}>Playoff</button>
+        <button onClick={() => setActiveTab('consolation')} className={`px-4 py-2 rounded-full ${activeTab === 'consolation' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-text-secondary hover:bg-tertiary'}`}>Consolazione</button>
         {isOrganizer && (
           <>
-            <button onClick={() => setActiveTab('groups')} className={`px-4 py-2 rounded-full ${activeTab === 'groups' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}>Gironi</button>
-            <button onClick={() => setActiveTab('players')} className={`px-4 py-2 rounded-full ${activeTab === 'players' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}>Giocatori</button>
+            <button onClick={() => setActiveTab('groups')} className={`px-4 py-2 rounded-full ${activeTab === 'groups' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-text-secondary hover:bg-tertiary'}`}>Gironi</button>
+            <button onClick={() => setActiveTab('players')} className={`px-4 py-2 rounded-full ${activeTab === 'players' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-text-secondary hover:bg-tertiary'}`}>Giocatori</button>
           </>
         )}
-        <button onClick={() => setActiveTab('rules')} className={`px-4 py-2 rounded-full ${activeTab === 'rules' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}>Regolamento</button>
+        <button onClick={() => setActiveTab('rules')} className={`px-4 py-2 rounded-full ${activeTab === 'rules' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-text-secondary hover:bg-tertiary'}`}>Regolamento</button>
         {isOrganizer && (
-          <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 rounded-full ${activeTab === 'settings' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}>Impostazioni</button>
+          <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 rounded-full ${activeTab === 'settings' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transparent text-text-secondary hover:bg-tertiary'}`}>Impostazioni</button>
         )}
       </div>
 
@@ -501,17 +499,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
           <ParticipantsTab event={event} tournament={tournament} loggedInPlayerId={loggedInPlayerId} />
         )}
 
-        {activeTab === 'timeSlots' && (
-          <TimeSlots
-            event={event}
-            tournament={tournament}
-            setEvents={setEvents}
-            isOrganizer={isOrganizer}
-            loggedInPlayerId={loggedInPlayerId}
-            selectedGroupId={selectedGroupId}
-            globalTimeSlots={event.globalTimeSlots ?? []}
-          />
-        )}
+        {/* SLOT ORARI rimossa */}
         {activeTab === 'playoffs' && (
           <Playoffs event={event} tournament={tournament} setEvents={setEvents} />
         )}
