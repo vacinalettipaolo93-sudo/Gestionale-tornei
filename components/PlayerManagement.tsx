@@ -7,7 +7,7 @@ const createInitialsAvatar = (name: string): string => {
   const initials = name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
   const colors = ['#8b5cf6', '#22d3ee', '#f59e0b', '#10b981', '#ef4444', '#3b82f6'];
   const color = colors[initials.charCodeAt(0) % colors.length];
-  const svg = `<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\" width=\"100\" height=\"100\"><rect width=\"100\" height=\"100\" fill=\"${color}\"/><text x=\"50\" y=\"50\" font-family=\"Arial, sans-serif\" font-size=\"50\" fill=\"white\" text-anchor=\"middle\" dominant-baseline=\"central\" dy=\".1em\">${initials}</text></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><rect width="100" height="100" fill="${color}"/><text x="50" y="50" font-family="sans-serif" font-size="48" fill="white" text-anchor="middle" alignment-baseline="central" dy=".3em">${initials}</text></svg>`;
   return `data:image/svg+xml;base64,${btoa(svg)}`;
 };
 
@@ -20,18 +20,14 @@ interface PlayerManagementProps {
 
 // Funzione anti-doppioni per aggiungere giocatore e utente
 async function addPlayerAndUserNoDuplicates(event: Event, playerData: { name: string; phone: string; avatar: string; }) {
-  // 1. Cerca se esiste già il player globale
   const playersRef = collection(db, "players");
   const q = query(playersRef, where("name", "==", playerData.name), where("phone", "==", playerData.phone));
   const existingPlayersSnap = await getDocs(q);
-
   let playerId;
   if (!existingPlayersSnap.empty) {
-    // Player esiste già
     const playerDoc = existingPlayersSnap.docs[0];
     playerId = playerDoc.id;
   } else {
-    // Crea nuovo player
     const playerDocRef = await addDoc(playersRef, {
       name: playerData.name,
       phone: playerData.phone,
@@ -40,8 +36,6 @@ async function addPlayerAndUserNoDuplicates(event: Event, playerData: { name: st
     });
     playerId = playerDocRef.id;
   }
-
-  // 2. Cerca se esiste già l'utente
   const usersRef = collection(db, "users");
   const userQ = query(usersRef, where("username", "==", playerData.name));
   const userSnap = await getDocs(userQ);
@@ -53,8 +47,6 @@ async function addPlayerAndUserNoDuplicates(event: Event, playerData: { name: st
       playerId
     });
   }
-
-  // 3. Aggiungi il player all'evento solo se non è già presente
   const alreadyInEvent = event.players.some(p => p.id === playerId);
   if (!alreadyInEvent) {
     const newPlayer = {
@@ -71,19 +63,21 @@ async function addPlayerAndUserNoDuplicates(event: Event, playerData: { name: st
 
 // Funzione per cancellare giocatore da evento e da Firestore
 async function removePlayerCompletely(event: Event, playerId: string) {
-  // 1. Rimuovi giocatore dalla lista event.players
   const updatedPlayers = event.players.filter(p => p.id !== playerId);
   await updateDoc(doc(db, "events", event.id), { players: updatedPlayers });
-
-  // 2. Cancella giocatore dalla collection "players"
   await deleteDoc(doc(db, "players", playerId));
-
-  // 3. (Opzionale) Cancella utente dalla collection "users"
   const usersRef = collection(db, "users");
   const userQ = query(usersRef, where("playerId", "==", playerId));
   const userSnap = await getDocs(userQ);
   userSnap.forEach(u => deleteDoc(u.ref));
 }
+
+// Funzione che determina se il giocatore è assegnato ad almeno un girone
+const isPlayerAssignedToGroup = (event: Event, playerId: string): boolean => {
+  return event.tournaments.some(tournament =>
+    tournament.groups.some(group => group.playerIds?.includes(playerId))
+  );
+};
 
 const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, isOrganizer, onPlayerContact }) => {
     const [replacingPlayer, setReplacingPlayer] = useState<Player | null>(null);
@@ -104,14 +98,12 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
         e.preventDefault();
         if(!newPlayerName.trim() || !newPlayerPhone.trim()) return;
         setLoading(true);
-
         try {
           await addPlayerAndUserNoDuplicates(event, {
             name: newPlayerName.trim(),
             phone: newPlayerPhone.trim(),
             avatar: createInitialsAvatar(newPlayerName.trim())
           });
-          // Aggiorna React state locale SENZA DUPLICATI
           setEvents(prevEvents => prevEvents.map(ev =>
             ev.id === event.id
               ? {
@@ -169,7 +161,6 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
     // SOSTITUISCI GIOCATORE E AGGIORNA FIRESTORE
     const handleReplacePlayer = async () => {
         if (!replacingPlayer || !replacementTarget) return;
-
         const newTournaments = event.tournaments.map(tourn => ({
             ...tourn,
             groups: tourn.groups.map(group => {
@@ -185,14 +176,12 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                 };
             })
         }));
-
         setEvents(prevEvents => prevEvents.map(e =>
             e.id === event.id ? {...e, tournaments: newTournaments} : e
         ));
         await updateDoc(doc(db, "events", event.id), {
             tournaments: newTournaments
         });
-
         setReplacingPlayer(null);
     };
 
@@ -269,7 +258,14 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                              <button onClick={() => onPlayerContact(player)} className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity">
                                 <img src={player.avatar} alt={player.name} className="w-10 h-10 rounded-full object-cover"/>
                                 <div>
-                                    <div className="font-semibold">{idx + 1}. {player.name}</div>
+                                    <div className="font-semibold flex items-center gap-2">
+                                      {idx + 1}. {player.name}
+                                      {isPlayerAssignedToGroup(event, player.id) && (
+                                        <span className="ml-2 px-2 py-[2px] rounded bg-green-600 text-white text-xs font-semibold">
+                                          Assegnato
+                                        </span>
+                                      )}
+                                    </div>
                                     <div className="text-sm text-text-secondary">{player.phone}</div>
                                 </div>
                             </button>
@@ -278,7 +274,7 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                                     <button onClick={() => setReplacingPlayer(player)} className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">
                                         Sostituisci
                                     </button>
-                                    <button onClick={() => handleDeletePlayer(player.id)} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">
+                                    <button onClick={() => handleDeletePlayer(player.id)} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
                                         Elimina
                                     </button>
                                 </div>
