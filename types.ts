@@ -85,6 +85,7 @@ export interface Event {
   players: Player[];
   invitationCode: string;
   globalTimeSlots?: TimeSlot[];
+  rules?: string; // <-- aggiunto campo regolamento
 }
 
 export interface StandingsEntry {
