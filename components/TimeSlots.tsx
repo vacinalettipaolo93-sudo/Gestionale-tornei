@@ -17,6 +17,7 @@ function generateSlotId() {
   return 'slot_' + Math.random().toString(36).slice(2, 10);
 }
 
+// Helper: Mappa slot prenotati in tutto l'evento
 function getBookedSlotsData(event: Event) {
   const booked: Record<string, { match: Match; group: Group; tournament: Tournament }> = {};
   (event.tournaments || []).forEach(t => {
@@ -49,11 +50,14 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
   const [modalMatchId, setModalMatchId] = useState<string>("");
   const [modalBookError, setModalBookError] = useState("");
 
-  // ***** SEZIONE SLOT GLOBALI - PAGINA HOME EVENTO *****
+  // ===============================
+  // 1. HOMEPAGE SEZIONE "Slot Orari Globali"
+  // ===============================
   if (!tournament) {
     const bookedSlotsData = getBookedSlotsData(event);
     const availableSlots = globalTimeSlots.filter(slot => !bookedSlotsData[slot.id]);
     const bookedSlots = globalTimeSlots.filter(slot => !!bookedSlotsData[slot.id]);
+
     const handleAddSlot = async () => {
       setSlotError("");
       if (!slotInput.start || isNaN(Date.parse(slotInput.start))) {
@@ -71,6 +75,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
         field: slotInput.field,
       };
       const updatedGlobalSlots = [...(event.globalTimeSlots || []), slotToAdd];
+
       setEvents(prevEvents =>
         prevEvents.map(ev =>
           ev.id === event.id
@@ -81,10 +86,12 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
       await updateDoc(doc(db, "events", event.id), {
         globalTimeSlots: updatedGlobalSlots,
       });
-      setSlotInput({ start: "", location: "", field: "" });
+      // NON svuotare gli input dopo aggiunta.
     };
+
     const handleDeleteSlot = async (slotId: string) => {
       const updatedGlobalSlots = (event.globalTimeSlots || []).filter(s => s.id !== slotId);
+
       setEvents(prevEvents =>
         prevEvents.map(ev =>
           ev.id === event.id
@@ -96,6 +103,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
         globalTimeSlots: updatedGlobalSlots,
       });
     };
+
     return (
       <div>
         <h2 className="text-2xl font-bold mb-4 text-accent">Slot Orari Globali</h2>
@@ -134,6 +142,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             {slotError && <span className="text-red-600 font-semibold">{slotError}</span>}
           </div>
         )}
+
         {/* BOX SLOT DISPONIBILI */}
         <div className="bg-[#212737] rounded-xl shadow-lg p-5 mb-6 w-full max-w-xl">
           <h4 className="font-bold text-[#3AF2C5] text-lg mb-3">Slot disponibili</h4>
@@ -196,9 +205,9 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
     );
   }
 
-  // ***** RESTO DEL FILE invariato *****
-  // ... tutto come era!
-
+  // ================================
+  // 2. Prenotazione slot inside torneo/girone (resto invariato)
+  // ================================
   const myPendingMatches: Match[] = tournament?.groups
     ? tournament.groups.flatMap(g =>
         g.matches.filter(m =>
