@@ -17,7 +17,6 @@ function generateSlotId() {
   return 'slot_' + Math.random().toString(36).slice(2, 10);
 }
 
-// Helper: Mappa slot prenotati in tutto l'evento.
 function getBookedSlotsData(event: Event) {
   const booked: Record<string, { match: Match; group: Group; tournament: Tournament }> = {};
   (event.tournaments || []).forEach(t => {
@@ -50,14 +49,11 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
   const [modalMatchId, setModalMatchId] = useState<string>("");
   const [modalBookError, setModalBookError] = useState("");
 
-  // ===============================
-  // 1. HOMEPAGE SEZIONE "Slot Orari Globali" - MODIFICATO!
-  // ===============================
+  // ***** SEZIONE SLOT GLOBALI - PAGINA HOME EVENTO *****
   if (!tournament) {
     const bookedSlotsData = getBookedSlotsData(event);
     const availableSlots = globalTimeSlots.filter(slot => !bookedSlotsData[slot.id]);
     const bookedSlots = globalTimeSlots.filter(slot => !!bookedSlotsData[slot.id]);
-
     const handleAddSlot = async () => {
       setSlotError("");
       if (!slotInput.start || isNaN(Date.parse(slotInput.start))) {
@@ -75,7 +71,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
         field: slotInput.field,
       };
       const updatedGlobalSlots = [...(event.globalTimeSlots || []), slotToAdd];
-
       setEvents(prevEvents =>
         prevEvents.map(ev =>
           ev.id === event.id
@@ -88,10 +83,8 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
       });
       setSlotInput({ start: "", location: "", field: "" });
     };
-
     const handleDeleteSlot = async (slotId: string) => {
       const updatedGlobalSlots = (event.globalTimeSlots || []).filter(s => s.id !== slotId);
-
       setEvents(prevEvents =>
         prevEvents.map(ev =>
           ev.id === event.id
@@ -103,12 +96,11 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
         globalTimeSlots: updatedGlobalSlots,
       });
     };
-
     return (
       <div>
         <h2 className="text-2xl font-bold mb-4 text-accent">Slot Orari Globali</h2>
         <h3 className="text-xl font-bold mb-6 text-accent">Gestione slot orari globali</h3>
-        {/* Aggiungi nuovo slot */}
+        {/* BOX AGGIUNGI NUOVO SLOT */}
         {isOrganizer && (
           <div className="bg-[#212737] rounded-xl p-5 mb-6 shadow-lg w-full max-w-md flex flex-col gap-3">
             <h4 className="font-bold text-[#3AF2C5] text-lg mb-1">Aggiungi nuovo slot</h4>
@@ -117,21 +109,21 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
               value={slotInput.start}
               onChange={e => setSlotInput({ ...slotInput, start: e.target.value })}
               placeholder="Data e ora"
-              className="input mb-2 bg-[#22283A] text-[#121212] font-bold placeholder:text-[#121212] placeholder:font-bold"
+              className="input mb-2 bg-[#22283A] text-white font-bold placeholder:text-white placeholder:font-bold"
             />
             <input
               type="text"
               value={slotInput.location}
               onChange={e => setSlotInput({ ...slotInput, location: e.target.value })}
               placeholder="Luogo"
-              className="input mb-2 bg-[#22283A] text-[#121212] font-bold placeholder:text-[#121212] placeholder:font-bold"
+              className="input mb-2 bg-[#22283A] text-white font-bold placeholder:text-white placeholder:font-bold"
             />
             <input
               type="text"
               value={slotInput.field}
               onChange={e => setSlotInput({ ...slotInput, field: e.target.value })}
               placeholder="Campo"
-              className="input mb-2 bg-[#22283A] text-[#121212] font-bold placeholder:text-[#121212] placeholder:font-bold"
+              className="input mb-2 bg-[#22283A] text-white font-bold placeholder:text-white placeholder:font-bold"
             />
             <button
               onClick={handleAddSlot}
@@ -142,22 +134,21 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             {slotError && <span className="text-red-600 font-semibold">{slotError}</span>}
           </div>
         )}
-
-        {/* Slot disponibili */}
+        {/* BOX SLOT DISPONIBILI */}
         <div className="bg-[#212737] rounded-xl shadow-lg p-5 mb-6 w-full max-w-xl">
           <h4 className="font-bold text-[#3AF2C5] text-lg mb-3">Slot disponibili</h4>
           {availableSlots.length === 0 ? (
-            <p className="text-gray-500 font-bold">Nessuno slot libero.</p>
+            <p className="text-gray-400 font-bold">Nessuno slot libero.</p>
           ) : (
             <ul className="space-y-2">
               {availableSlots.map(slot => (
-                <li key={slot.id} className="flex items-center justify-between border-b border-gray-300 pb-2">
+                <li key={slot.id} className="flex items-center justify-between border-b border-gray-800 pb-2">
                   <div>
-                    <span className="font-bold text-[#121212]">{slot.start}</span>{" "}
-                    <span>-</span>{" "}
-                    <span className="text-accent">{slot.location}</span>{" "}
-                    <span>-</span>{" "}
-                    <span className="text-tertiary">{slot.field}</span>
+                    <span className="font-bold text-white">{slot.start}</span>{" "}
+                    <span className="text-white">-</span>{" "}
+                    <span className="text-accent font-bold">{slot.location}</span>{" "}
+                    <span className="text-white">-</span>{" "}
+                    <span className="text-tertiary font-bold">{slot.field}</span>
                   </div>
                   <div>
                     {isOrganizer && (
@@ -174,25 +165,24 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             </ul>
           )}
         </div>
-
-        {/* Slot prenotati */}
+        {/* BOX SLOT PRENOTATI */}
         <div className="bg-[#212737] rounded-xl shadow-lg p-5 mb-6 w-full max-w-xl">
           <h4 className="font-bold text-[#3AF2C5] text-lg mb-3">Slot prenotati</h4>
           {bookedSlots.length === 0 ? (
-            <p className="text-gray-500 font-bold">Nessuno slot prenotato.</p>
+            <p className="text-gray-400 font-bold">Nessuno slot prenotato.</p>
           ) : (
             <ul className="space-y-2">
               {bookedSlots.map(slot => {
                 const booking = bookedSlotsData[slot.id];
                 return (
                   <li key={slot.id} className="flex flex-col px-2 py-2 rounded bg-[#22283A]">
-                    <span className="font-bold text-[#121212]">
+                    <span className="font-bold text-white">
                       {slot.start} - {slot.location} - {slot.field}
                     </span>
                     <span className="font-bold text-accent">
                       Partita prenotata:
                     </span>
-                    <span className="text-[#121212] font-bold">
+                    <span className="text-white font-bold">
                       {booking?.match.player1Id} vs {booking?.match.player2Id}
                       {" "}({booking?.tournament?.name}, girone: {booking?.group?.name})
                     </span>
@@ -206,9 +196,9 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
     );
   }
 
-  // ================================
-  // 2. Prenotazione slot inside torneo/girone (resto invariato)
-  // ================================
+  // ***** RESTO DEL FILE invariato *****
+  // ... tutto come era!
+
   const myPendingMatches: Match[] = tournament?.groups
     ? tournament.groups.flatMap(g =>
         g.matches.filter(m =>
@@ -363,9 +353,8 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
   };
 
   return (
-    // --- resto invariato ---
     <div>
-      {/* ...SECTION TORNEO/GIRONE come già scritto... */}
+      {/* ...SEZIONE TORNEO/GIRONE invariata... */}
     </div>
   );
 };
