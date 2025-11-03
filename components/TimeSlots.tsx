@@ -39,12 +39,11 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
   const [modalMatchId, setModalMatchId] = useState<string>("");
   const [modalBookError, setModalBookError] = useState("");
 
-  // Safety: non fare nulla se non c'è tournament/groups
   if (!tournament || !tournament.groups) {
     return <div className="text-red-500">Dati torneo non disponibili, ricarica la pagina.</div>;
   }
 
-  // Prendi tutte le partite "pending" dell'utente
+  // Trova tutte le partite "pending" dell'utente
   const myPendingMatches: Match[] = tournament.groups
     ? tournament.groups.flatMap(g =>
         g.matches.filter(m =>
@@ -54,18 +53,21 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
       )
     : [];
 
-  // ############ N O V I T À : Filtraggio slot disponibili! ############
-  // Prendi tutti gli slot già prenotati (slotId associato a una partita scheduled/completed)
-  const bookedSlotIds: string[] = tournament.groups
-    ? tournament.groups.flatMap(g =>
-        g.matches
-          .filter(m => m.slotId && (m.status === "scheduled" || m.status === "completed"))
-          .map(m => m.slotId!)
-      )
-    : [];
+  // ########### NOVITÀ: FILTRO SLOT A LIVELLO EVENTO ############
+  // Prendi tutti gli slot già prenotati da QUALSIASI partita di QUALSIASI torneo/girone
+  const allBookedSlotIds: string[] = event.tournaments
+    .flatMap(tournament =>
+      tournament.groups
+        ? tournament.groups.flatMap(group =>
+            group.matches
+              .filter(match => match.slotId && (match.status === "scheduled" || match.status === "completed"))
+              .map(match => match.slotId!)
+          )
+        : []
+    );
 
-  // Lista degli slot DISPONIBILI: solo quelli che NON sono prenotati!
-  const availableSlots = globalTimeSlots.filter(slot => !bookedSlotIds.includes(slot.id));
+  // Slot disponibili: solo quelli non prenotati da nessuno
+  const availableSlots = globalTimeSlots.filter(slot => !allBookedSlotIds.includes(slot.id));
 
   // Funzione aggiunta slot organizzatore
   const handleAddSlot = async () => {
@@ -119,14 +121,13 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
     setModalBookError("");
     const slot = (event.globalTimeSlots || []).find(s => s.id === modalSlotId);
     const match = myPendingMatches.find(m => m.id === modalMatchId);
-    // --- Modifica: PRENOTO solo se slot è DISPONIBILE! ---
+    // Filtra anche lato backend! Se slot è prenotato, errore
     if (!slot || !match) {
       setModalBookError("Devi selezionare una partita.");
       return;
     }
-    // Se lo slot è già prenotato da un'altra match, impedisci!
-    if (bookedSlotIds.includes(slot.id)) {
-      setModalBookError("Questo slot è già prenotato da un'altra partita.");
+    if (allBookedSlotIds.includes(slot.id)) {
+      setModalBookError("Questo slot è già prenotato in qualche torneo/girone.");
       return;
     }
     const updatedMatch: Match = {
@@ -135,7 +136,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
       scheduledTime: new Date(slot.start).toISOString(),
       location: slot.location ?? "",
       field: slot.field ?? (slot.location ?? ""),
-      slotId: slot.id // ****** AGGIUNGI il slotId! ******
+      slotId: slot.id // AGGIUNGI slotId!
     };
     const updatedGroups = tournament.groups.map(g =>
       g.matches.some(m => m.id === match.id)
@@ -178,7 +179,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
                     scheduledTime: null,
                     location: "",
                     field: "",
-                    slotId: undefined // <-- RIMUOVI il collegamento slot!
+                    slotId: undefined // LIBERA lo slot!
                   }
                 : m
             ),
@@ -203,10 +204,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
       )
     });
   };
-
-  // Funzione gestione prenotazione da tab globlale: mostra SOLO slot disponibili
-  // Esempio render slot disponibili solo se NON già occupato!
-  // Puoi usare availableSlots anziché globalTimeSlots nel rendering!
 
   return (
     <div>
@@ -251,8 +248,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             availableSlots.map(slot => (
               <li key={slot.id}>
                 {slot.start} - {slot.location} - {slot.field}
-                {/* Example: bottone per prenotare (solo se sei utente e non già prenotato) */}
-                {myPendingMatches.length > 0 && !bookedSlotIds.includes(slot.id) && (
+                {myPendingMatches.length > 0 && (
                   <button
                     onClick={() => {
                       setModalSlotId(slot.id);
@@ -271,7 +267,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
         </ul>
       </div>
 
-      {/* Modal prenotazione, mostra ERRORE se slot già occupato! */}
       {modalSlotId && (
         <div className="modal">
           <h5>Prenotazione slot</h5>
@@ -291,9 +286,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
           {modalBookError && <div className="text-red-600">{modalBookError}</div>}
         </div>
       )}
-
-      {/* Opzione annulla prenotazione (solo esempio: implementare nel punto dove serviva!) */}
-      {/* <button onClick={() => handleCancelMatchBooking(match.id)}>Annulla prenotazione</button> */}
     </div>
   );
 };
