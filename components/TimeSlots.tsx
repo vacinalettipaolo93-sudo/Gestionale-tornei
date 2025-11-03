@@ -72,9 +72,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
     const availableSlots = globalTimeSlots.filter(slot => !bookedSlotsData[slot.id]);
     const bookedSlots = globalTimeSlots.filter(slot => !!bookedSlotsData[slot.id]);
 
-    // PATCH: Mostra tutte le slot prenotate dagli utenti in tempo reale!
-    // In bookedSlotsData sono tutte le slot globali prenotate nell'evento da qualsiasi torneo/girone
-
     const handleAddSlot = async () => {
       setSlotError("");
       if (!slotInput.start || isNaN(Date.parse(slotInput.start))) {
@@ -191,12 +188,10 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             </ul>
           )}
         </div>
-        {/* BOX SLOT PRENOTATI */}
+        {/* BOX SLOT PRENOTATI - Lista AGGIORNATA DA Firestore */}
         <div className="bg-[#212737] rounded-xl shadow-lg p-5 mb-6 w-full max-w-xl">
           <h4 className="font-bold text-[#3AF2C5] text-lg mb-3">Slot prenotati</h4>
-          {/* PATCH: Mostra TUTTI GLI SLOT prenotati da tornei/gironi */}
           {
-            // Array di slot globali che sono prenotati da QUALSIASI torneo/girone/partita
             Object.keys(bookedSlotsData).length === 0 ? (
               <p className="text-gray-400 font-bold">Nessuno slot prenotato.</p>
             ) : (
@@ -349,6 +344,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
   };
 
   const handleCancelMatchBooking = async (matchId: string) => {
+    // Trova la partita e il gruppo
     const updatedGroups = tournament.groups.map(g =>
       g.matches.some(m => m.id === matchId)
         ? {
