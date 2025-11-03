@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { type Event, type Tournament } from "../types";
-import { updateDoc, doc, onSnapshot } from "firebase/firestore";
+import { updateDoc, doc } from "firebase/firestore";
 import { db } from "../firebase";
 import TimeSlots from "./TimeSlots";
 
@@ -11,81 +11,6 @@ interface EventViewProps {
   isOrganizer: boolean;
   loggedInPlayerId?: string;
 }
-
-function findMatchForSlot(slotId: string, event: Event) {
-  if (!event?.tournaments) return null;
-  for (const tournament of event.tournaments) {
-    if (tournament.groups) {
-      for (const group of tournament.groups) {
-        if (group.matches) {
-          for (const match of group.matches) {
-            if (match.slotId === slotId) {
-              return match;
-            }
-          }
-        }
-      }
-    }
-  }
-  return null;
-}
-
-// Inserisci la sezione slot prenotate qui:
-const SlotPrenotateRealtime: React.FC<{ eventId: string; }> = ({ eventId }) => {
-  const [eventData, setEventData] = useState<Event | null>(null);
-  const [bookedSlots, setBookedSlots] = useState<any[]>([]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, "events", eventId), (snap) => {
-      const data = snap.data() as Event;
-      setEventData(data);
-      if (data?.globalTimeSlots) {
-        setBookedSlots(data.globalTimeSlots.filter(s => s.bookedBy));
-      }
-    });
-    return unsub;
-  }, [eventId]);
-
-  if (!eventData) return null;
-
-  // Mappa ID → nome giocatore (se ti serve mostrare nome)
-  const playerMap: Record<string, string> =
-    eventData.players?.reduce((map: Record<string, string>, p) => {
-      map[p.id] = p.name;
-      return map;
-    }, {}) || {};
-
-  return (
-    <div className="mt-6 bg-tertiary p-4 rounded-lg shadow">
-      <h2 className="text-xl font-bold mb-4 text-white">Slot prenotate (Live)</h2>
-      <ul>
-        {bookedSlots.length === 0 ? (
-          <li className="text-text-secondary">Nessuno slot prenotato</li>
-        ) : (
-          bookedSlots.map(slot => {
-            const match = findMatchForSlot(slot.id, eventData);
-            return (
-              <li key={slot.id} className="mb-3 text-text-primary">
-                <strong>{slot.start} - {slot.end}</strong>
-                {" — Prenotato da: "}
-                <span className="font-semibold text-accent">{playerMap[slot.bookedBy] || slot.bookedBy}</span>
-                {" — "}
-                {match ? (
-                  <>
-                    Partita: <span className="font-semibold">{match.description || `ID ${match.id}`}</span>
-                  </>
-                ) : (
-                  <span className="text-text-secondary">Nessuna partita assegnata</span>
-                )}
-              </li>
-            );
-          })
-        )}
-      </ul>
-    </div>
-  );
-};
-
 
 const EventView: React.FC<EventViewProps> = ({
   event,
@@ -183,8 +108,6 @@ const EventView: React.FC<EventViewProps> = ({
             selectedGroupId={undefined}
             globalTimeSlots={event.globalTimeSlots}
           />
-          {/* === SLOT PRENOTATE (LIVE) SOTTO TimeSlots === */}
-          <SlotPrenotateRealtime eventId={event.id} />
         </div>
       )}
 
