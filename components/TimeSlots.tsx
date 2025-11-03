@@ -17,14 +17,15 @@ function generateSlotId() {
   return 'slot_' + Math.random().toString(36).slice(2, 10);
 }
 
-// Helper: Mappa slot prenotati in tutto l'evento
+// Helper: Mappa slot prenotati in tutto l'evento (scheduled e completed)
 function getBookedSlotsData(event: Event) {
   const booked: Record<string, { match: Match; group: Group; tournament: Tournament }> = {};
   (event.tournaments || []).forEach(t => {
     (t.groups || []).forEach(g => {
       (g.matches || []).forEach(m => {
-        if (m.slotId && (m.status === "scheduled" || m.status === "completed"))
+        if (m.slotId && (m.status === "scheduled" || m.status === "completed")) {
           booked[m.slotId] = { match: m, group: g, tournament: t };
+        }
       });
     });
   });
@@ -42,6 +43,21 @@ function formatDateTime(dateStr: string) {
   const h = String(d.getHours()).padStart(2, '0');
   const min = String(d.getMinutes()).padStart(2, '0');
   return `${gg}/${mm}/${aaaa}, ${h}:${min}`;
+}
+
+// Nuovo helper: mostra SOLO le partite programmate (status === "scheduled") nello spazio slot prenotati
+function getScheduledSlotsData(event: Event) {
+  const scheduled: Record<string, { match: Match; group: Group; tournament: Tournament }> = {};
+  (event.tournaments || []).forEach(t => {
+    (t.groups || []).forEach(g => {
+      (g.matches || []).forEach(m => {
+        if (m.slotId && m.status === "scheduled") {
+          scheduled[m.slotId] = { match: m, group: g, tournament: t };
+        }
+      });
+    });
+  });
+  return scheduled;
 }
 
 const TimeSlots: React.FC<TimeSlotsProps> = ({
@@ -67,8 +83,8 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
   // 1. HOMEPAGE SEZIONE "Slot Orari Globali"
   // ===============================
   if (!tournament) {
-    // PRENDE slot prenotati in tutto l'evento
     const bookedSlotsData = getBookedSlotsData(event);
+    const scheduledSlotsData = getScheduledSlotsData(event); // Solo "scheduled"
     const availableSlots = globalTimeSlots.filter(slot => !bookedSlotsData[slot.id]);
 
     const handleAddSlot = async () => {
@@ -187,14 +203,14 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             </ul>
           )}
         </div>
-        {/* SLOT PRENOTATI */}
+        {/* SLOT PRENOTATI: SOLO PARTITE PROGRAMMATE (scheduled) */}
         <div className="bg-[#212737] rounded-xl shadow-lg p-5 mb-6 w-full max-w-xl">
           <h4 className="font-bold text-[#3AF2C5] text-lg mb-3">Slot prenotati</h4>
-          {Object.keys(bookedSlotsData).length === 0 ? (
-            <p className="text-gray-400 font-bold">Nessuno slot prenotato.</p>
+          {Object.keys(scheduledSlotsData).length === 0 ? (
+            <p className="text-gray-400 font-bold">Nessuna partita programmata.</p>
           ) : (
             <ul className="space-y-2">
-              {Object.entries(bookedSlotsData).map(([slotId, { match, group, tournament }]) => {
+              {Object.entries(scheduledSlotsData).map(([slotId, { match, group, tournament }]) => {
                 const slot = globalTimeSlots.find(s => s.id === slotId);
                 if (!slot) return null;
                 const player1 = event.players.find(p => p.id === match.player1Id)?.name || match.player1Id;
@@ -205,14 +221,14 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
                       {formatDateTime(slot.start)} - {slot.location} - {slot.field}
                     </span>
                     <span className="font-bold text-accent">
-                      Partita assegnata:
+                      Partita programmata:
                     </span>
                     <span className="text-white font-bold">
                       {player1} vs {player2}
                       {" "}({tournament.name}, girone: {group.name})
                     </span>
                     <span className="text-sm text-gray-300">
-                      Stato: {match.status === "completed" ? "Completata" : "Prenotata"}
+                      Stato: Programmata
                     </span>
                   </li>
                 );
