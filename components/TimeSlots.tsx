@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { updateDoc, doc } from "firebase/firestore";
 import { db } from "../firebase";
-import { type Event, type Tournament, type TimeSlot, type Match } from '../types';
+import { type Event, type Tournament, type TimeSlot, type Match, type Group } from '../types';
 
 interface TimeSlotsProps {
   event: Event;
@@ -15,6 +15,21 @@ interface TimeSlotsProps {
 
 function generateSlotId() {
   return 'slot_' + Math.random().toString(36).slice(2, 10);
+}
+
+// Helper: Mappa slot prenotati in tutto l'evento.
+// Restituisce slotId -> { match, group, tournament }
+function getBookedSlotsData(event: Event) {
+  const booked: Record<string, { match: Match; group: Group; tournament: Tournament }> = {};
+  (event.tournaments || []).forEach(t => {
+    (t.groups || []).forEach(g => {
+      (g.matches || []).forEach(m => {
+        if (m.slotId && (m.status === "scheduled" || m.status === "completed"))
+          booked[m.slotId] = { match: m, group: g, tournament: t };
+      });
+    });
+  });
+  return booked;
 }
 
 const TimeSlots: React.FC<TimeSlotsProps> = ({
@@ -36,9 +51,168 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
   const [modalMatchId, setModalMatchId] = useState<string>("");
   const [modalBookError, setModalBookError] = useState("");
 
-  if (!tournament || !tournament.groups) {
-    return <div className="text-red-500">Dati torneo non disponibili, ricarica la pagina.</div>;
+  // ===============================
+  // 1. CASO "Slot globali" (home evento): tournament è undefined.
+  // Mostra la lista slot, gestione solo aggiunta/elimina, stato prenotazione.
+  // ===============================
+  if (!tournament) {
+    // PRENDE slot prenotati in tutto l'evento
+    const bookedSlotsData = getBookedSlotsData(event);
+    const availableSlots = globalTimeSlots.filter(slot => !bookedSlotsData[slot.id]);
+    const bookedSlots = globalTimeSlots.filter(slot => !!bookedSlotsData[slot.id]);
+
+    const handleAddSlot = async () => {
+      setSlotError("");
+      if (!slotInput.start || isNaN(Date.parse(slotInput.start))) {
+        setSlotError("Inserisci una data e ora valida (ISO oppure YY-MM-DD HH:mm:ss).");
+        return;
+      }
+      if (!slotInput.location) {
+        setSlotError("Inserisci il campo/luogo.");
+        return;
+      }
+      const slotToAdd: TimeSlot = {
+        id: generateSlotId(),
+        start: slotInput.start,
+        location: slotInput.location,
+        field: slotInput.field,
+      };
+      const updatedGlobalSlots = [...(event.globalTimeSlots || []), slotToAdd];
+
+      setEvents(prevEvents =>
+        prevEvents.map(ev =>
+          ev.id === event.id
+            ? { ...ev, globalTimeSlots: updatedGlobalSlots }
+            : ev
+        )
+      );
+      await updateDoc(doc(db, "events", event.id), {
+        globalTimeSlots: updatedGlobalSlots,
+      });
+      setSlotInput({ start: "", location: "", field: "" });
+    };
+
+    const handleDeleteSlot = async (slotId: string) => {
+      const updatedGlobalSlots = (event.globalTimeSlots || []).filter(s => s.id !== slotId);
+
+      setEvents(prevEvents =>
+        prevEvents.map(ev =>
+          ev.id === event.id
+            ? { ...ev, globalTimeSlots: updatedGlobalSlots }
+            : ev
+        )
+      );
+      await updateDoc(doc(db, "events", event.id), {
+        globalTimeSlots: updatedGlobalSlots,
+      });
+    };
+
+    return (
+      <div>
+        <h2 className="text-2xl font-bold mb-4 text-accent">Gestione slot orari globali</h2>
+
+        {/* Inserimento slot (solo organizzatore) */}
+        {isOrganizer && (
+          <div className="bg-tertiary rounded-xl p-5 mb-6 shadow-lg w-full max-w-md flex flex-col gap-3">
+            <h4 className="font-bold text-accent text-lg mb-1">Aggiungi nuovo slot</h4>
+            <input
+              type="datetime-local"
+              value={slotInput.start}
+              onChange={e => setSlotInput({ ...slotInput, start: e.target.value })}
+              placeholder="Data e ora"
+              className="input mb-2"
+            />
+            <input
+              type="text"
+              value={slotInput.location}
+              onChange={e => setSlotInput({ ...slotInput, location: e.target.value })}
+              placeholder="Luogo"
+              className="input mb-2"
+            />
+            <input
+              type="text"
+              value={slotInput.field}
+              onChange={e => setSlotInput({ ...slotInput, field: e.target.value })}
+              placeholder="Campo"
+              className="input mb-2"
+            />
+            <button
+              onClick={handleAddSlot}
+              className="btn-accent self-start px-5 py-1 rounded font-semibold"
+            >
+              Aggiungi slot
+            </button>
+            {slotError && <span className="text-red-600 font-semibold">{slotError}</span>}
+          </div>
+        )}
+
+        <div className="bg-tertiary rounded-xl shadow-lg p-5 mb-6 w-full max-w-xl">
+          {/* SLOT disponibili */}
+          <h4 className="font-bold text-accent text-lg mb-3">Slot disponibili</h4>
+          {availableSlots.length === 0 ? (
+            <p className="text-gray-500">Nessuno slot libero.</p>
+          ) : (
+            <ul className="space-y-2">
+              {availableSlots.map(slot => (
+                <li key={slot.id} className="flex items-center justify-between border-b border-gray-300 pb-2">
+                  <div>
+                    <span className="font-semibold">{slot.start}</span>{" "}
+                    <span>-</span>{" "}
+                    <span className="text-accent">{slot.location}</span>{" "}
+                    <span>-</span>{" "}
+                    <span className="text-tertiary">{slot.field}</span>
+                  </div>
+                  <div>
+                    {isOrganizer && (
+                      <button
+                        className="btn-tertiary px-3 py-1 rounded font-semibold"
+                        onClick={() => handleDeleteSlot(slot.id)}
+                      >
+                        Elimina
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* SLOT prenotati */}
+        <div className="bg-tertiary rounded-xl shadow-lg p-5 mb-6 w-full max-w-xl">
+          <h4 className="font-bold text-accent text-lg mb-3">Slot prenotati</h4>
+          {bookedSlots.length === 0 ? (
+            <p className="text-gray-500">Nessuno slot prenotato.</p>
+          ) : (
+            <ul className="space-y-2">
+              {bookedSlots.map(slot => {
+                const booking = bookedSlotsData[slot.id];
+                return (
+                  <li key={slot.id} className="flex flex-col px-2 py-2 rounded bg-gray-100">
+                    <span>
+                      <b>{slot.start}</b> - {slot.location} - {slot.field}
+                    </span>
+                    <span>
+                      <b>Partita prenotata:</b>{" "}
+                      <span>
+                        {booking?.match.player1Id} vs {booking?.match.player2Id}
+                        {" "}({booking?.tournament?.name}, girone: {booking?.group?.name})
+                      </span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
   }
+
+  // ================================
+  // 2. CASO "Prenotazione slot all'interno TORNEO"
+  // Restante codice invariato (come tua versione sopra)
+  // ================================
 
   const myPendingMatches: Match[] = tournament.groups
     ? tournament.groups.flatMap(g =>
@@ -195,7 +369,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
 
   return (
     <div>
-      {/* SEZIONE TITOLI E CARD */}
       <h2 className="text-2xl font-bold mb-4 text-accent">Gestione slot orari globali</h2>
 
       {isOrganizer && (
