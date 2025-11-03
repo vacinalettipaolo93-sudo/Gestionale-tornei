@@ -31,6 +31,19 @@ function getBookedSlotsData(event: Event) {
   return booked;
 }
 
+// Formatting: da ISO -> "gg/mm/aaaa, hh:mm"
+function formatDateTime(dateStr: string) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const gg = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const aaaa = d.getFullYear();
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${gg}/${mm}/${aaaa}, ${h}:${min}`;
+}
+
 const TimeSlots: React.FC<TimeSlotsProps> = ({
   event,
   tournament,
@@ -153,7 +166,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
               {availableSlots.map(slot => (
                 <li key={slot.id} className="flex items-center justify-between border-b border-gray-800 pb-2">
                   <div>
-                    <span className="font-bold text-white">{slot.start}</span>{" "}
+                    <span className="font-bold text-white">{formatDateTime(slot.start)}</span>{" "}
                     <span className="text-white">-</span>{" "}
                     <span className="text-accent font-bold">{slot.location}</span>{" "}
                     <span className="text-white">-</span>{" "}
@@ -186,7 +199,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
                 return (
                   <li key={slot.id} className="flex flex-col px-2 py-2 rounded bg-[#22283A]">
                     <span className="font-bold text-white">
-                      {slot.start} - {slot.location} - {slot.field}
+                      {formatDateTime(slot.start)} - {slot.location} - {slot.field}
                     </span>
                     <span className="font-bold text-accent">
                       Partita prenotata:
