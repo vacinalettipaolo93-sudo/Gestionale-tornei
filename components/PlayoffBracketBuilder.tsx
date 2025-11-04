@@ -11,16 +11,11 @@ interface PlayoffBracketBuilderProps {
 const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
     event, tournament, setEvents, isOrganizer
 }) => {
-    // Ottieni il numero di qualificati dai settings, aggiornato live!
+    // Dinamico: legge sempre da tournament.settings.playoffPlayers!
     const playoffPlayersCount = tournament.settings?.playoffPlayers || 16;
 
-    // Calcola i giocatori con posizione e gruppo (puoi sostituire con la tua vera classifica)
-    const allRankings: {
-        playerId: string,
-        rank: number,
-        fromGroup: string,
-        groupName: string
-    }[] = useMemo(() => {
+    // Ottieni standings/classifica reale del torneo/gironi -- qui puoi mettere la tua logica vera!
+    const allRankings = useMemo(() => {
         let standingsArr: { playerId: string, rank: number, fromGroup: string, groupName: string }[] = [];
         tournament.groups.forEach(group => {
             group.playerIds.forEach((pid, idx) => {
@@ -32,11 +27,11 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
                 });
             });
         });
-        standingsArr.sort((a, b) => a.rank - b.rank); // Puoi usare la tua logica qui!
+        standingsArr.sort((a, b) => a.rank - b.rank);
         return standingsArr.slice(0, playoffPlayersCount);
-    }, [tournament, playoffPlayersCount]);
+    }, [tournament.groups, event.players, playoffPlayersCount]);
 
-    // Calcola la bracketSize (prossima potenza di 2)
+    // Calcolatore bracketSize live
     const bracketSize = useMemo(() => {
         const numPlayers = allRankings.length;
         if (numPlayers < 2) return 0;
@@ -45,7 +40,7 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
 
     const [firstRoundAssignments, setFirstRoundAssignments] = useState<(string | null)[]>([]);
 
-    // Aggiorna la bracket quando cambiano numPlayers/impostazioni
+    // Reset/aggiornamento live ogni volta che cambiano i settings o i ranking
     useEffect(() => {
         setFirstRoundAssignments(Array(bracketSize).fill(null));
     }, [bracketSize]);
@@ -65,9 +60,8 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
         });
     };
 
-    // Funzione per generare il tabellone (qui solo esempio, integralo con la tua logica firestore)
+    // Funzione per generare il tabellone (adatta la logica al tuo stato/Firestore)
     const handleGenerateBracket = () => {
-        // Qui salvi il tabellone su Firestore, aggiorni Tournament.playoffs, ecc.
         console.log("Genera playoff bracket", firstRoundAssignments);
         alert("Tabellone playoff generato! Collega qui la tua logica di salvataggio.");
     };
@@ -76,7 +70,7 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
     const numByesAvailable = bracketSize - allRankings.length;
     const byesAssigned = firstRoundAssignments.filter(a => a === 'BYE').length;
 
-    // Slot per assegnazione manuale
+    // Select per assegnare
     const AssignmentSlot = ({ slotIndex }: { slotIndex: number }) => {
         const currentValue = firstRoundAssignments[slotIndex];
         const currentPlayer = getPlayer(currentValue);
