@@ -75,7 +75,7 @@ const MatchCard: React.FC<{
           </button>
         </div>
 
-        {/* Score centale */}
+        {/* Score centrale */}
         <div className="flex flex-col items-center">
           {match.score1 != null && match.score2 != null ? (
             <div className="text-2xl font-bold text-center">
@@ -168,14 +168,13 @@ const MatchList: React.FC<MatchListProps> = ({
 
   const pendingMatches = filteredMatches('pending');
   
-  // --- MODIFICA QUI: partite programmate devono anche avere slotId/scheduledTime ---
+  // --- FILTRI MIGLIORATI: "partite programmate" mostra solo se slotId + scheduledTime è valorizzato ---
   const scheduledMatches = group.matches.filter(m =>
     m.status === 'scheduled' &&
     m.slotId &&
     m.scheduledTime &&
     (filter === 'all' || (!!loggedInPlayerId && (m.player1Id === loggedInPlayerId || m.player2Id === loggedInPlayerId)))
   );
-  // --- FINE MODIFICA ---
   
   const completedMatches = group.matches.filter(m => m.score1 != null && m.score2 != null);
 
@@ -183,9 +182,19 @@ const MatchList: React.FC<MatchListProps> = ({
     <div className="space-y-6">
       {!isOrganizer && (
         <div className="flex justify-center mb-4">
-          <div className="bg-tertiary/50 rounded-lg p-1">
-            <button onClick={() => setFilter('my')} className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors ${filter === 'my' ? 'bg-highlight text-white' : 'text-text-secondary'}`}>Le[...]
-            <button onClick={() => setFilter('all')} className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors ${filter === 'all' ? 'bg-highlight text-white' : 'text-text-secondary'}`}>[...]
+          <div className="bg-tertiary/50 rounded-lg p-1 flex">
+            <button
+              onClick={() => setFilter('my')}
+              className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors ${filter === 'my' ? 'bg-highlight text-white' : 'text-text-secondary'}`}
+            >
+              Le mie
+            </button>
+            <button
+              onClick={() => setFilter('all')}
+              className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors ${filter === 'all' ? 'bg-highlight text-white' : 'text-text-secondary'}`}
+            >
+              Tutte
+            </button>
           </div>
         </div>
       )}
