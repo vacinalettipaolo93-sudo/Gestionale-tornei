@@ -46,7 +46,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
   const [bookingError, setBookingError] = useState<string>("");
 
-  // Patch fondamentale: calcolo degli slot già prenotati!
+  // Calcolo slot già prenotati in tutti i tornei
   function getAllBookedSlotIds(): string[] {
     return event.tournaments.flatMap(tournament =>
       tournament.groups
@@ -84,22 +84,21 @@ const TournamentView: React.FC<TournamentViewProps> = ({
         ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) }
         : g
     );
+    const updatedTournaments = event.tournaments.map(t =>
+      t.id === tournament.id ? { ...t, groups: updatedGroups } : t
+    );
     setEvents(prevEvents =>
       prevEvents.map(e =>
         e.id === event.id
           ? {
             ...e,
-            tournaments: event.tournaments.map(t =>
-              t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-            )
+            tournaments: updatedTournaments
           }
           : e
       )
     );
     await updateDoc(doc(db, "events", event.id), {
-      tournaments: event.tournaments.map(t =>
-        t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-      )
+      tournaments: updatedTournaments
     });
     setEditingMatch(null);
     setScore1("");
@@ -120,22 +119,21 @@ const TournamentView: React.FC<TournamentViewProps> = ({
         ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) }
         : g
     );
+    const updatedTournaments = event.tournaments.map(t =>
+      t.id === tournament.id ? { ...t, groups: updatedGroups } : t
+    );
     setEvents(prevEvents =>
       prevEvents.map(e =>
         e.id === event.id
           ? {
             ...e,
-            tournaments: event.tournaments.map(t =>
-              t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-            )
+            tournaments: updatedTournaments
           }
           : e
       )
     );
     await updateDoc(doc(db, "events", event.id), {
-      tournaments: event.tournaments.map(t =>
-        t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-      )
+      tournaments: updatedTournaments
     });
     setDeletingMatch(null);
   }
@@ -293,6 +291,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     <div>
       {/* Tabs menu */}
       <div className="flex gap-2 mb-6 flex-wrap">
+        {/* ...Bottoni tab identici a quelli delle risposte sopra... */}
         <button onClick={() => setActiveTab('standings')}
           className={`px-4 py-2 rounded-full ${activeTab === 'standings'
             ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
