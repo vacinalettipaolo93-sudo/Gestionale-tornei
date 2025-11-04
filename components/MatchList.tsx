@@ -167,7 +167,16 @@ const MatchList: React.FC<MatchListProps> = ({
   };
 
   const pendingMatches = filteredMatches('pending');
-  const scheduledMatches = filteredMatches('scheduled');
+  
+  // --- MODIFICA QUI: partite programmate devono anche avere slotId/scheduledTime ---
+  const scheduledMatches = group.matches.filter(m =>
+    m.status === 'scheduled' &&
+    m.slotId &&
+    m.scheduledTime &&
+    (filter === 'all' || (!!loggedInPlayerId && (m.player1Id === loggedInPlayerId || m.player2Id === loggedInPlayerId)))
+  );
+  // --- FINE MODIFICA ---
+  
   const completedMatches = group.matches.filter(m => m.score1 != null && m.score2 != null);
 
   return (
@@ -175,8 +184,8 @@ const MatchList: React.FC<MatchListProps> = ({
       {!isOrganizer && (
         <div className="flex justify-center mb-4">
           <div className="bg-tertiary/50 rounded-lg p-1">
-            <button onClick={() => setFilter('my')} className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors ${filter === 'my' ? 'bg-highlight text-white' : 'text-text-secondary'}`}>Le mie partite</button>
-            <button onClick={() => setFilter('all')} className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors ${filter === 'all' ? 'bg-highlight text-white' : 'text-text-secondary'}`}>Tutte le partite</button>
+            <button onClick={() => setFilter('my')} className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors ${filter === 'my' ? 'bg-highlight text-white' : 'text-text-secondary'}`}>Le[...]
+            <button onClick={() => setFilter('all')} className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors ${filter === 'all' ? 'bg-highlight text-white' : 'text-text-secondary'}`}>[...]
           </div>
         </div>
       )}
