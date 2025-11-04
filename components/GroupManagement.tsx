@@ -380,6 +380,34 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                 <p className="text-center text-text-secondary py-8">Crea un girone per iniziare la gestione.</p>
             )}
 
+            {/* Modale: Assegna giocatori al girone */}
+            {assigningGroup && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
+                    <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-sm border border-tertiary">
+                        <h4 className="text-lg font-bold mb-4">
+                            Assegna Giocatori a {assigningGroup.name}
+                        </h4>
+                        <ul className="mb-4 space-y-2 max-h-80 overflow-auto">
+                            {event.players.map(player => (
+                                <li key={player.id} className="flex items-center gap-3">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedPlayers.has(player.id)}
+                                        onChange={() => handlePlayerSelection(player.id)}
+                                    />
+                                    <img src={player.avatar} alt={player.name} className="w-7 h-7 rounded-full object-cover" />
+                                    <span className="font-medium">{player.name}</span>
+                                </li>
+                            ))}
+                        </ul>
+                        <div className="flex justify-end gap-2 mt-2">
+                            <button onClick={() => setAssigningGroup(null)} className="bg-tertiary px-4 py-2 rounded">Annulla</button>
+                            <button onClick={handleSaveAssignments} className="bg-highlight text-white px-4 py-2 rounded font-bold">Salva Assegnazione</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Modal: Modifica girone! Qui puoi MODIFICARE il regolamento */}
             {isEditOpen && editingGroup && (
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
