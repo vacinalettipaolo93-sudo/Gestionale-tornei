@@ -70,7 +70,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
         e.id === event.id
           ? {
               ...e,
-              tournaments: e.tournaments.map(t =>
+              tournaments: event.tournaments.map(t =>
                 t.id === tournament.id ? { ...t, groups: updatedGroups } : t
               )
             }
@@ -106,7 +106,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
         e.id === event.id
           ? {
               ...e,
-              tournaments: e.tournaments.map(t =>
+              tournaments: event.tournaments.map(t =>
                 t.id === tournament.id ? { ...t, groups: updatedGroups } : t
               )
             }
@@ -282,23 +282,85 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     <div>
       {/* Tabs menu */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        <button onClick={() => setActiveTab('standings')} className={`px-4 py-2 rounded-full ${activeTab === 'standings' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-t[...]
-        <button onClick={() => setActiveTab('matches')} className={`px-4 py-2 rounded-full ${activeTab === 'matches' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-trans[...]
+        <button onClick={() => setActiveTab('standings')}
+          className={`px-4 py-2 rounded-full ${activeTab === 'standings'
+            ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
+            : 'bg-transparent text-accent'
+          }`}
+        >
+          Classifica
+        </button>
+        <button onClick={() => setActiveTab('matches')}
+          className={`px-4 py-2 rounded-full ${activeTab === 'matches'
+            ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
+            : 'bg-transparent text-accent'
+          }`}
+        >
+          Partite
+        </button>
         {!isOrganizer && (
-          <button onClick={() => setActiveTab('participants')} className={`px-4 py-2 rounded-full ${activeTab === 'participants' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'[...]
+          <button onClick={() => setActiveTab('participants')}
+            className={`px-4 py-2 rounded-full ${activeTab === 'participants'
+              ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
+              : 'bg-transparent text-accent'
+            }`}
+          >
+            Partecipanti
+          </button>
         )}
-        {/* SLOT ORARI rimossa */}
-        <button onClick={() => setActiveTab('playoffs')} className={`px-4 py-2 rounded-full ${activeTab === 'playoffs' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-tra[...]
-        <button onClick={() => setActiveTab('consolation')} className={`px-4 py-2 rounded-full ${activeTab === 'consolation' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : '[...]
+        <button onClick={() => setActiveTab('playoffs')}
+          className={`px-4 py-2 rounded-full ${activeTab === 'playoffs'
+            ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
+            : 'bg-transparent text-accent'
+          }`}
+        >
+          Playoff
+        </button>
+        <button onClick={() => setActiveTab('consolation')}
+          className={`px-4 py-2 rounded-full ${activeTab === 'consolation'
+            ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
+            : 'bg-transparent text-accent'
+          }`}
+        >
+          Consolazione
+        </button>
         {isOrganizer && (
           <>
-            <button onClick={() => setActiveTab('groups')} className={`px-4 py-2 rounded-full ${activeTab === 'groups' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-tra[...]
-            <button onClick={() => setActiveTab('players')} className={`px-4 py-2 rounded-full ${activeTab === 'players' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-t[...]
+            <button onClick={() => setActiveTab('groups')}
+              className={`px-4 py-2 rounded-full ${activeTab === 'groups'
+                ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
+                : 'bg-transparent text-accent'
+              }`}
+            >
+              Gestione Gironi
+            </button>
+            <button onClick={() => setActiveTab('players')}
+              className={`px-4 py-2 rounded-full ${activeTab === 'players'
+                ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
+                : 'bg-transparent text-accent'
+              }`}
+            >
+              Giocatori
+            </button>
           </>
         )}
-        <button onClick={() => setActiveTab('rules')} className={`px-4 py-2 rounded-full ${activeTab === 'rules' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-transpare[...]
+        <button onClick={() => setActiveTab('rules')}
+          className={`px-4 py-2 rounded-full ${activeTab === 'rules'
+            ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
+            : 'bg-transparent text-accent'
+          }`}
+        >
+          Regolamento
+        </button>
         {isOrganizer && (
-          <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 rounded-full ${activeTab === 'settings' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg' : 'bg-t[...]
+          <button onClick={() => setActiveTab('settings')}
+            className={`px-4 py-2 rounded-full ${activeTab === 'settings'
+              ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
+              : 'bg-transparent text-accent'
+            }`}
+          >
+            Impostazioni
+          </button>
         )}
       </div>
 
