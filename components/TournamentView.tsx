@@ -592,6 +592,16 @@ const TournamentView: React.FC<TournamentViewProps> = ({
             {event.rules?.trim()
               ? <div className="bg-primary p-4 rounded-lg border border-tertiary">{event.rules}</div>
               : <p className="text-text-secondary">Nessun regolamento inserito dall'organizzatore.</p>}
+            {/* AGGIUNTA: regolamento specifico del girone */}
+            <div className="mt-8">
+              <h3 className="text-xl font-bold mb-4 text-accent">
+                Regolamento Girone: {selectedGroup?.name}
+              </h3>
+              {selectedGroup?.rules?.trim()
+                ? <div className="bg-primary p-4 rounded-lg border border-tertiary">{selectedGroup.rules}</div>
+                : <p className="text-text-secondary">Nessun regolamento inserito per questo girone.</p>
+              }
+            </div>
           </div>
         )}
       </div>
