@@ -25,6 +25,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
     const [editingGroup, setEditingGroup] = useState<Group | null>(null);
     const [editGroupName, setEditGroupName] = useState('');
     const [editGroupSize, setEditGroupSize] = useState<number>(0);
+    const [editGroupRules, setEditGroupRules] = useState(''); // <-- NEW STATE
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [groupToDelete, setGroupToDelete] = useState<Group | null>(null);
     const [loading, setLoading] = useState(false);
@@ -144,20 +145,12 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
             if (e.id !== event.id) return e;
             return {
                 ...e,
-                tournaments: e.tournaments.map(t => {
-                    if (t.id !== tournament.id) return t;
-                    return {
-                        ...t,
-                        groups: updatedGroups
-                    };
-                })
-            };
-        }));
+                tournaments: e.tournaments.map(t => t.id === tournament.id ? { ...t, groups: updatedGroups } : t)
+                };
+            }));
 
         await updateDoc(doc(db, "events", event.id), {
-            tournaments: event.tournaments.map(t =>
-                t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-            )
+            tournaments: event.tournaments.map(t => t.id === tournament.id ? { ...t, groups: updatedGroups } : t)
         });
     };
 
@@ -176,13 +169,13 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
             const newGroup: Group = {
                 id: makeId(),
                 name: newGroupName || `Girone ${tournament.groups.length + 1}`,
-                playerIds: [], // partiamo senza giocatori; l'assegnamento è gestito dall'apposita modale
-                matches: []
-            } as any;
+                playerIds: [],
+                matches: [],
+                rules: ""
+            };
 
             const updatedGroups = [...tournament.groups, newGroup];
 
-            // Aggiorna stato locale
             setEvents(prevEvents => prevEvents.map(e => {
                 if (e.id !== event.id) return e;
                 return {
@@ -191,7 +184,6 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                 };
             }));
 
-            // Persisti su Firestore
             await updateDoc(doc(db, "events", event.id), {
                 tournaments: event.tournaments.map(t => t.id === tournament.id ? { ...t, groups: updatedGroups } : t)
             });
@@ -209,6 +201,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
         setEditingGroup(g);
         setEditGroupName(g.name);
         setEditGroupSize(g.playerIds?.length ?? 0);
+        setEditGroupRules(g.rules ?? "");
         setError(null);
         setIsEditOpen(true);
     };
@@ -218,19 +211,14 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
         setLoading(true);
         setError(null);
         try {
-            // Ridimensionamento playerIds: se si riduce, rimuoviamo gli ID rimossi e le partite collegate
             const original = editingGroup;
             const targetSize = Math.max(0, Math.floor(editGroupSize));
             let newPlayerIds = original.playerIds ? original.playerIds.slice(0, targetSize) : [];
 
-            // se aumentiamo la dimensione, non aggiungiamo placeholder: lasciamo gli slot vuoti (array più lungo non necessario)
             if (targetSize > (original.playerIds?.length ?? 0)) {
-                // non aggiungiamo valori fittizi, l'assegnamento avverrà tramite "Assegna Giocatori"
-                // manteniamo gli stessi playerIds (nessuna aggiunta)
                 newPlayerIds = original.playerIds ?? [];
             }
 
-            // Rimuove le match che coinvolgono player rimossi (se la size è diminuita)
             const removedPlayerIds = (original.playerIds ?? []).slice(targetSize);
             const newMatches = original.matches ? original.matches.filter(m =>
                 !removedPlayerIds.includes(m.player1Id) && !removedPlayerIds.includes(m.player2Id)
@@ -240,12 +228,12 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                 ...original,
                 name: editGroupName,
                 playerIds: newPlayerIds,
-                matches: newMatches
-            } as any;
+                matches: newMatches,
+                rules: editGroupRules // <-- salva il regolamento qui!
+            };
 
             const updatedGroups = tournament.groups.map(g => g.id === updatedGroup.id ? updatedGroup : g);
 
-            // Aggiorna stato locale
             setEvents(prevEvents => prevEvents.map(e => {
                 if (e.id !== event.id) return e;
                 return {
@@ -254,7 +242,6 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                 };
             }));
 
-            // Persisti su Firestore
             await updateDoc(doc(db, "events", event.id), {
                 tournaments: event.tournaments.map(t => t.id === tournament.id ? { ...t, groups: updatedGroups } : t)
             });
@@ -282,7 +269,6 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
         try {
             const updatedGroups = tournament.groups.filter(g => g.id !== groupToDelete.id);
 
-            // Aggiorna stato locale
             setEvents(prevEvents => prevEvents.map(e => {
                 if (e.id !== event.id) return e;
                 return {
@@ -291,7 +277,6 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                 };
             }));
 
-            // Persisti su Firestore
             await updateDoc(doc(db, "events", event.id), {
                 tournaments: event.tournaments.map(t => t.id === tournament.id ? { ...t, groups: updatedGroups } : t)
             });
@@ -321,7 +306,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
             </div>
 
             {tournament.groups.map(group => (
-                <div key={group.id} className="bg-secondary p-4 rounded-xl shadow-md">
+                <div key={group.id} className="bg-secondary p-4 rounded-xl shadow-md mb-8">
                     <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
                         <div className="flex items-center gap-3">
                             <h4 className="text-lg font-bold text-accent">{group.name}</h4>
@@ -338,15 +323,12 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                             >
                                 Genera Partite
                             </button>
-
-                            {/* Edit / Delete girone (admin) */}
                             <button
                                 onClick={() => openEditGroup(group)}
                                 className="bg-tertiary hover:bg-tertiary/90 text-text-primary py-2 px-3 rounded-lg text-sm transition-colors"
                             >
                                 Modifica
                             </button>
-
                             <button
                                 onClick={() => openDeleteGroup(group)}
                                 className="bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded-lg text-sm transition-colors flex items-center gap-2"
@@ -368,7 +350,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                                                 <img src={player.avatar} alt={player.name} className="w-8 h-8 rounded-full flex-shrink-0 object-cover" />
                                                 <span className="text-sm font-medium truncate">{player.name}</span>
                                             </div>
-                                            <button onClick={() => setPlayerToRemove({player, group})} className="opacity-0 group-hover/player:opacity-100 text-text-secondary/50 hover:text-red-500 transition-opacity">
+                                            <button onClick={() => setPlayerToRemove({player, group})} className="opacity-0 group-hover/player:opacity-100 text-text-secondary/50 hover:text-red-500 tra[...]
                                                 <TrashIcon className="w-4 h-4" />
                                             </button>
                                         </li>
@@ -377,81 +359,24 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                             </ul>
                         ) : <p className="text-text-secondary/80 italic text-sm">Nessun giocatore assegnato a questo girone.</p>}
                     </div>
+                    {/* Mostra regolamento del gruppo (SOLO ADMIN può modificare) */}
+                    <div className="mt-4 pt-3 border-t border-tertiary/40">
+                        <h5 className="text-sm font-semibold mb-2 text-text-secondary">Regolamento del Girone</h5>
+                        <div className="bg-tertiary p-3 rounded-lg border border-tertiary">
+                            {group.rules?.trim() ?
+                                <div style={{ whiteSpace: 'pre-line' }}>{group.rules}</div>
+                                :
+                                <span className="text-text-secondary">Nessun regolamento inserito per questo girone.</span>
+                            }
+                        </div>
+                    </div>
                 </div>
             ))}
-             {tournament.groups.length === 0 && (
+            {tournament.groups.length === 0 && (
                 <p className="text-center text-text-secondary py-8">Crea un girone per iniziare la gestione.</p>
-             )}
-
-            {/* Modal: Assegna giocatori */}
-            {assigningGroup && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
-                    <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-lg border border-tertiary">
-                        <h4 className="text-lg font-bold mb-4">Assegna Giocatori a {assigningGroup.name}</h4>
-                        <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
-                           {event.players
-                             .filter(p=>p.status === 'confirmed')
-                             .slice()
-                             .sort((a, b) => a.name.localeCompare(b.name))
-                             .map(player => (
-                                <label key={player.id} className="flex items-center gap-3 p-2 bg-tertiary/50 rounded-lg cursor-pointer hover:bg-tertiary">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedPlayers.has(player.id)}
-                                        onChange={() => handlePlayerSelection(player.id)}
-                                        className="w-5 h-5 rounded bg-primary border-tertiary text-accent focus:ring-accent ring-offset-secondary"
-                                    />
-                                     <img src={player.avatar} alt={player.name} className="w-8 h-8 rounded-full object-cover" />
-                                    <span>{player.name}</span>
-                                </label>
-                           ))}
-                           {event.players.filter(p=>p.status === 'confirmed').length === 0 && <p className="text-text-secondary">Nessun giocatore confermato da assegnare. Aggiungi giocatori dalla scheda "Giocatori".</p>}
-                        </div>
-                        <div className="flex justify-end gap-4 mt-6">
-                            <button onClick={() => setAssigningGroup(null)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annulla</button>
-                            <button onClick={handleSaveAssignments} className="bg-highlight hover:bg-highlight/80 text-white font-bold py-2 px-4 rounded-lg transition-colors">Salva Assegnazioni</button>
-                        </div>
-                    </div>
-                </div>
             )}
 
-            {/* Modal: Conferma rimozione giocatore */}
-            {playerToRemove && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
-                    <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
-                        <h4 className="text-lg font-bold mb-4">Conferma Rimozione</h4>
-                        <p className="text-text-secondary">Sei sicuro di voler rimuovere {playerToRemove.player.name} dal girone {playerToRemove.group.name}? Tutte le sue partite verranno eliminate dal girone.</p>
-                        <div className="flex justify-end gap-4 mt-6">
-                            <button onClick={() => setPlayerToRemove(null)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annulla</button>
-                            <button onClick={handleRemovePlayer} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Rimuovi</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal: Aggiungi girone */}
-            {isAddOpen && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
-                    <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-sm border border-tertiary">
-                        <h4 className="text-lg font-bold mb-4">Nuovo Girone</h4>
-                        <input
-                            value={newGroupName}
-                            onChange={e => setNewGroupName(e.target.value)}
-                            placeholder="Nome girone"
-                            className="w-full mb-2 p-2 rounded bg-primary border"
-                            autoFocus
-                        />
-                        <p className="text-sm text-text-secondary mb-4">Dopo la creazione potrai assegnare i giocatori con "Assegna Giocatori".</p>
-                        {error && <div className="text-red-400 mb-2">{error}</div>}
-                        <div className="flex justify-end gap-4">
-                            <button onClick={() => setIsAddOpen(false)} className="bg-tertiary px-4 py-2 rounded">Annulla</button>
-                            <button onClick={handleAddGroup} disabled={loading} className="bg-highlight text-white px-4 py-2 rounded">{loading ? 'Creando...' : 'Crea Girone'}</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal: Modifica girone */}
+            {/* Modal: Modifica girone! Qui puoi MODIFICARE il regolamento */}
             {isEditOpen && editingGroup && (
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
                     <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-sm border border-tertiary">
@@ -464,7 +389,17 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                             autoFocus
                         />
                         <label className="text-sm text-text-secondary">Numero attuale di giocatori: {editingGroup.playerIds.length}</label>
-                        <p className="text-sm text-text-secondary mb-4">Per modificare i giocatori usa "Assegna Giocatori". Ridurre il numero rimuoverà i giocatori oltre la dimensione scelta e le loro partite.</p>
+                        <p className="text-sm text-text-secondary mb-2">Per modificare i giocatori usa "Assegna Giocatori". Ridurre il numero rimuoverà i giocatori oltre la dimensione scelta e le lor[...]
+                        <div className="mb-2">
+                            <label className="text-sm text-text-secondary">Regolamento del girone</label>
+                            <textarea
+                                value={editGroupRules}
+                                onChange={e => setEditGroupRules(e.target.value)}
+                                placeholder="Scrivi qui il regolamento per questo girone..."
+                                className="w-full p-2 rounded bg-tertiary border mb-2 min-h-[80px]"
+                                rows={4}
+                            />
+                        </div>
                         <div className="flex justify-end gap-4">
                             <button onClick={() => { setIsEditOpen(false); setEditingGroup(null); }} className="bg-tertiary px-4 py-2 rounded">Annulla</button>
                             <button onClick={handleSaveEditGroup} disabled={loading} className="bg-highlight text-white px-4 py-2 rounded">{loading ? 'Salvando...' : 'Salva Modifica'}</button>
@@ -483,7 +418,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                         {error && <div className="text-red-400 mt-2">{error}</div>}
                         <div className="flex justify-end gap-4 mt-6">
                             <button onClick={() => { setIsDeleteOpen(false); setGroupToDelete(null); }} className="bg-tertiary px-4 py-2 rounded">Annulla</button>
-                            <button onClick={handleDeleteGroup} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">{loading ? 'Eliminando...' : 'Elimina Girone'}</button>
+                            <button onClick={handleDeleteGroup} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">{loading ? 'Eliminando...' : 'Elimina Girone'}</[...]
                         </div>
                     </div>
                 </div>
