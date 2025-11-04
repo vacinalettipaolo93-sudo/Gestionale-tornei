@@ -9,7 +9,7 @@ import Playoffs from './Playoffs';
 import ConsolationBracket from './ConsolationBracket';
 import PlayerManagement from './PlayerManagement';
 import { db } from "../firebase";
-import { updateDoc, doc, addDoc, collection } from "firebase/firestore";
+import { updateDoc, doc } from "firebase/firestore";
 
 interface TournamentViewProps {
   event: Event;
@@ -100,19 +100,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     await updateDoc(doc(db, "events", event.id), {
       tournaments: updatedTournaments
     });
-    // Salvataggio separato risultati
-    await addDoc(collection(db, "results"), {
-      eventId: event.id,
-      tournamentId: tournament.id,
-      groupId: selectedGroup.id,
-      matchId: match.id,
-      score1: updatedMatch.score1,
-      score2: updatedMatch.score2,
-      player1Id: updatedMatch.player1Id,
-      player2Id: updatedMatch.player2Id,
-      enteredBy: loggedInPlayerId,
-      enteredAt: new Date().toISOString(),
-    });
     setEditingMatch(null);
     setScore1("");
     setScore2("");
@@ -147,20 +134,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     );
     await updateDoc(doc(db, "events", event.id), {
       tournaments: updatedTournaments
-    });
-    // Salvataggio separato eliminazione risultati
-    await addDoc(collection(db, "results"), {
-      eventId: event.id,
-      tournamentId: tournament.id,
-      groupId: selectedGroup.id,
-      matchId: match.id,
-      score1: null,
-      score2: null,
-      player1Id: match.player1Id,
-      player2Id: match.player2Id,
-      deletedBy: loggedInPlayerId,
-      deletedAt: new Date().toISOString(),
-      deleted: true
     });
     setDeletingMatch(null);
   }
@@ -223,19 +196,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     await updateDoc(doc(db, "events", event.id), {
       tournaments: updatedTournaments
     });
-    // Salvataggio separato prenotazione
-    await addDoc(collection(db, "bookings"), {
-      eventId: event.id,
-      tournamentId: tournament.id,
-      groupId: selectedGroup.id,
-      matchId: match.id,
-      slotId: timeSlot.id,
-      scheduledTime: updatedMatch.scheduledTime,
-      location: updatedMatch.location,
-      field: updatedMatch.field,
-      bookedBy: loggedInPlayerId,
-      bookedAt: new Date().toISOString(),
-    });
     setBookingMatch(null);
     setSelectedSlotId("");
     setBookingError("");
@@ -285,20 +245,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     await updateDoc(doc(db, "events", event.id), {
       tournaments: updatedTournaments
     });
-    // Salvataggio separato modifica prenotazione
-    await addDoc(collection(db, "bookings"), {
-      eventId: event.id,
-      tournamentId: tournament.id,
-      groupId: selectedGroup.id,
-      matchId: match.id,
-      slotId: timeSlot?.id ?? "",
-      scheduledTime: updatedMatch.scheduledTime,
-      location: updatedMatch.location,
-      field: updatedMatch.field,
-      rescheduledBy: loggedInPlayerId,
-      rescheduledAt: new Date().toISOString(),
-      isRescheduled: true
-    });
     setReschedulingMatch(null);
     setRescheduleSlotId("");
     setBookingError("");
@@ -336,28 +282,16 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     await updateDoc(doc(db, "events", event.id), {
       tournaments: updatedTournaments
     });
-    // Salvataggio separato annullamento prenotazione
-    await addDoc(collection(db, "bookings"), {
-      eventId: event.id,
-      tournamentId: tournament.id,
-      groupId: selectedGroup.id,
-      matchId: match.id,
-      slotId: match.slotId ?? "",
-      cancelledBy: loggedInPlayerId,
-      cancelledAt: new Date().toISOString(),
-      isCancelled: true
-    });
   }
 
-  // MODAL CSS
   const modalBg = "fixed inset-0 bg-black/70 flex items-center justify-center z-50";
   const modalBox = "bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary";
 
-  // UI resta invariata rispetto alla versione funzionante
   return (
     <div>
       {/* Tabs menu */}
       <div className="flex gap-2 mb-6 flex-wrap">
+        {/* ...Bottoni tab identici a quelli delle risposte sopra... */}
         <button onClick={() => setActiveTab('standings')}
           className={`px-4 py-2 rounded-full ${activeTab === 'standings'
             ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
@@ -439,6 +373,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
           </button>
         )}
       </div>
+
       {/* Selettore gironi */}
       {selectedGroup && (
         <div className="mb-6 flex items-center gap-3">
@@ -454,6 +389,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
           </select>
         </div>
       )}
+
       <div>
         {activeTab === 'standings' && selectedGroup && (
           <div>
@@ -467,6 +403,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
             />
           </div>
         )}
+
         {activeTab === 'matches' && selectedGroup && (
           <div>
             <h3 className="text-xl font-bold mb-3 text-accent">{selectedGroup.name}</h3>
@@ -483,13 +420,156 @@ const TournamentView: React.FC<TournamentViewProps> = ({
               onDeleteResult={match => setDeletingMatch(match)}
               viewingOwnGroup={selectedGroup.playerIds.includes(loggedInPlayerId ?? "")}
             />
-            {/* Modali tutte invariati, vedi messaggi precedenti! */}
-            {/* ... */}
+
+            {/* Modale INSERISCI/MODIFICA RISULTATO */}
+            {editingMatch && (
+              <div className={modalBg}>
+                <div className={modalBox}>
+                  <h4 className="mb-4 font-bold text-lg text-accent">Modifica Risultato</h4>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col">
+                      <label className="font-bold mb-1 text-white">Risultato per {event.players.find(p => p.id === editingMatch.player1Id)?.name}</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={score1}
+                        onChange={e => setScore1(e.target.value)}
+                        className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <label className="font-bold mb-1 text-white">Risultato per {event.players.find(p => p.id === editingMatch.player2Id)?.name}</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={score2}
+                        onChange={e => setScore2(e.target.value)}
+                        className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                      />
+                    </div>
+                    <div className="flex gap-2 justify-end pt-3">
+                      <button
+                        onClick={() => setEditingMatch(null)}
+                        className="bg-tertiary px-4 py-2 rounded"
+                      >Annulla</button>
+                      <button
+                        disabled={score1 === "" || score2 === ""}
+                        onClick={async () => { await saveMatchResult(editingMatch); setEditingMatch(null); }}
+                        className="bg-highlight text-white px-4 py-2 rounded"
+                      >Salva</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modale ELIMINA RISULTATO */}
+            {deletingMatch && (
+              <div className={modalBg}>
+                <div className={modalBox}>
+                  <h4 className="mb-4 font-bold text-lg text-red-600">Elimina risultato partita</h4>
+                  <p className="mb-6 font-bold text-white">Sei sicuro di voler eliminare il risultato della partita tra&nbsp;
+                    <strong>{event.players.find(p => p.id === deletingMatch.player1Id)?.name}</strong> e&nbsp;
+                    <strong>{event.players.find(p => p.id === deletingMatch.player2Id)?.name}</strong>?
+                  </p>
+                  <div className="flex gap-2 justify-end pt-3">
+                    <button
+                      onClick={() => setDeletingMatch(null)}
+                      className="bg-tertiary px-4 py-2 rounded"
+                    >Annulla</button>
+                    <button
+                      onClick={async () => { await deleteMatchResult(deletingMatch); setDeletingMatch(null);}}
+                      className="bg-red-600 text-white px-4 py-2 rounded"
+                    >Elimina</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modale PRENOTA */}
+            {bookingMatch && (
+              <div className={modalBg}>
+                <div className={modalBox}>
+                  <h4 className="mb-4 font-bold text-lg text-accent">Prenota Partita</h4>
+                  <div className="flex flex-col gap-4">
+                    <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
+                    <select
+                      value={selectedSlotId}
+                      onChange={e => { setSelectedSlotId(e.target.value); setBookingError(""); }}
+                      className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                    >
+                      <option value="">Seleziona uno slot</option>
+                      {getAvailableSlots().map(slot => (
+                        <option key={slot.id} value={slot.id}>
+                          {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {bookingError && <div className="text-red-500 font-bold">{bookingError}</div>}
+                    <div className="flex gap-2 justify-end pt-3">
+                      <button
+                        onClick={() => {setBookingMatch(null);setBookingError("");}}
+                        className="bg-tertiary px-4 py-2 rounded"
+                      >Annulla</button>
+                      <button
+                        disabled={!selectedSlotId}
+                        onClick={async () => { await saveMatchBooking(bookingMatch); setBookingMatch(null);}}
+                        className="bg-highlight text-white px-4 py-2 rounded"
+                      >Prenota</button>
+                    </div>
+                    {getAvailableSlots().length === 0 &&
+                      <p className="text-text-secondary mt-2">Nessuno slot disponibile, chiedi all'organizzatore di aggiungere slot!</p>
+                    }
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modale MODIFICA PRENOTAZIONE */}
+            {reschedulingMatch && (
+              <div className={modalBg}>
+                <div className={modalBox}>
+                  <h4 className="mb-4 font-bold text-lg text-accent">Modifica Prenotazione</h4>
+                  <div className="flex flex-col gap-4">
+                    <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
+                    <select
+                      value={rescheduleSlotId}
+                      onChange={e => setRescheduleSlotId(e.target.value)}
+                      className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                    >
+                      <option value="">Seleziona uno slot</option>
+                      {getAvailableSlots().map(slot => (
+                        <option key={slot.id} value={slot.id}>
+                          {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex gap-2 justify-end pt-3">
+                      <button
+                        onClick={() => setReschedulingMatch(null)}
+                        className="bg-tertiary px-4 py-2 rounded"
+                      >Annulla</button>
+                      <button
+                        disabled={!rescheduleSlotId}
+                        onClick={async () => { await saveRescheduleMatch(reschedulingMatch); setReschedulingMatch(null);}}
+                        className="bg-highlight text-white px-4 py-2 rounded"
+                      >Salva</button>
+                    </div>
+                    {getAvailableSlots().length === 0 &&
+                      <p className="text-text-secondary mt-2">Nessuno slot disponibile, chiedi all'organizzatore di aggiungere slot!</p>
+                    }
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         )}
+
         {activeTab === 'participants' && !isOrganizer && (
           <ParticipantsTab event={event} tournament={tournament} loggedInPlayerId={loggedInPlayerId} />
         )}
+
         {activeTab === 'playoffs' && (
           <Playoffs event={event} tournament={tournament} setEvents={setEvents} />
         )}
