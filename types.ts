@@ -15,6 +15,8 @@ export interface Match {
   status: 'pending' | 'scheduled' | 'completed';
   scheduledTime?: string;
   location?: string;
+  field?: string;
+  slotId?: string;
 }
 
 export interface Group {
@@ -22,6 +24,7 @@ export interface Group {
   name: string;
   playerIds: string[];
   matches: Match[];
+  rules?: string; // <-- aggiunto campo regolamento
 }
 
 export interface PointRule {
@@ -56,9 +59,23 @@ export interface TournamentSettings {
 
 export interface TimeSlot {
     id: string;
-    time: string;
+    start: string;
     location: string;
-    matchId: string | null;
+    field: string;
+}
+
+export interface PlayoffMatch {
+  id: string;
+  round: number;
+  matchIndex: number;
+  player1Id: string | null;
+  player2Id: string | null;
+  score1: number | null;
+  score2: number | null;
+  winnerId: string | null;
+  nextMatchId: string | null;
+  isBronzeFinal?: boolean;
+  loserGoesToBronzeFinal?: boolean;
 }
 
 export interface PlayoffBracket {
@@ -85,7 +102,7 @@ export interface Event {
   players: Player[];
   invitationCode: string;
   globalTimeSlots?: TimeSlot[];
-  rules?: string; // <-- aggiunto campo regolamento
+  rules?: string;
 }
 
 export interface StandingsEntry {
