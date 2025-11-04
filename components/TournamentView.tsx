@@ -31,7 +31,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
   const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'participants' | 'playoffs' | 'consolation' | 'groups' | 'settings' | 'rules' | 'players'>('standings');
 
-  // Stati modali
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   const [score1, setScore1] = useState<string>("");
   const [score2, setScore2] = useState<string>("");
@@ -51,12 +50,12 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       window.open(`https://wa.me/${player.phone.replace(/[^0-9]/g, "")}`, "_blank");
   };
 
-  // INSERISCI/MODIFICA RISULTATO
   const handleEditResult = (match: Match) => {
     setEditingMatch(match);
     setScore1(match.score1 !== null ? String(match.score1) : "");
     setScore2(match.score2 !== null ? String(match.score2) : "");
   };
+
   async function saveMatchResult(match: Match) {
     if (!selectedGroup) return;
     const updatedMatch = { ...match, score1: Number(score1), score2: Number(score2), status: "completed" };
@@ -69,11 +68,11 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       prevEvents.map(e =>
         e.id === event.id
           ? {
-              ...e,
-              tournaments: event.tournaments.map(t =>
-                t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-              )
-            }
+            ...e,
+            tournaments: event.tournaments.map(t =>
+              t.id === tournament.id ? { ...t, groups: updatedGroups } : t
+            )
+          }
           : e
       )
     );
@@ -87,7 +86,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     setScore2("");
   }
 
-  // ELIMINA RISULTATO
   async function deleteMatchResult(match: Match) {
     if (!selectedGroup) return;
     const updatedMatch: Match = {
@@ -105,11 +103,11 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       prevEvents.map(e =>
         e.id === event.id
           ? {
-              ...e,
-              tournaments: event.tournaments.map(t =>
-                t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-              )
-            }
+            ...e,
+            tournaments: event.tournaments.map(t =>
+              t.id === tournament.id ? { ...t, groups: updatedGroups } : t
+            )
+          }
           : e
       )
     );
@@ -121,12 +119,12 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     setDeletingMatch(null);
   }
 
-  // PRENOTA
   const handleBookMatch = (match: Match) => {
     setBookingMatch(match);
     setSelectedSlotId("");
     setBookingError("");
   };
+
   async function saveMatchBooking(match: Match) {
     if (!selectedGroup) return;
     const globalSlots = Array.isArray(event.globalTimeSlots) ? event.globalTimeSlots : [];
@@ -151,13 +149,11 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       location: timeSlot.location ?? "",
       field: timeSlot.field ?? (timeSlot.location ?? ""),
     };
-
     const updatedGroups = tournament.groups.map(g =>
       g.id === selectedGroup.id
         ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) }
         : g
     );
-    // PATCH: aggiorna tournaments per salvataggio corretto!
     const updatedTournaments = event.tournaments.map(t =>
       t.id === tournament.id ? { ...t, groups: updatedGroups } : t
     );
@@ -165,9 +161,9 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       prevEvents.map(e =>
         e.id === event.id
           ? {
-              ...e,
-              tournaments: updatedTournaments
-            }
+            ...e,
+            tournaments: updatedTournaments
+          }
           : e
       )
     );
@@ -179,11 +175,11 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     setBookingError("");
   }
 
-  // MODIFICA PRENOTAZIONE
   const handleRescheduleMatch = (match: Match) => {
     setReschedulingMatch(match);
     setRescheduleSlotId("");
   };
+
   async function saveRescheduleMatch(match: Match) {
     if (!selectedGroup) return;
     const globalSlots = Array.isArray(event.globalTimeSlots) ? event.globalTimeSlots : [];
@@ -201,7 +197,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
         ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) }
         : g
     );
-    // PATCH: aggiorna tournaments per salvataggio corretto!
     const updatedTournaments = event.tournaments.map(t =>
       t.id === tournament.id ? { ...t, groups: updatedGroups } : t
     );
@@ -209,9 +204,9 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       prevEvents.map(e =>
         e.id === event.id
           ? {
-              ...e,
-              tournaments: updatedTournaments
-            }
+            ...e,
+            tournaments: updatedTournaments
+          }
           : e
       )
     );
@@ -222,8 +217,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     setRescheduleSlotId("");
   }
 
-  // ANNULLA PRENOTAZIONE
-  const handleCancelBooking = async (match: Match) => {
+  async function handleCancelBooking(match: Match) {
     if (!selectedGroup) return;
     const updatedMatch: Match = {
       ...match,
@@ -237,7 +231,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
         ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) }
         : g
     );
-    // PATCH: aggiorna tournaments per salvataggio corretto!
     const updatedTournaments = event.tournaments.map(t =>
       t.id === tournament.id ? { ...t, groups: updatedGroups } : t
     );
@@ -245,18 +238,17 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       prevEvents.map(e =>
         e.id === event.id
           ? {
-              ...e,
-              tournaments: updatedTournaments
-            }
+            ...e,
+            tournaments: updatedTournaments
+          }
           : e
       )
     );
     await updateDoc(doc(db, "events", event.id), {
       tournaments: updatedTournaments
     });
-  };
+  }
 
-  // Sempre solo slot globali!
   function getBookedSlotIds(): string[] {
     if (!selectedGroup) return [];
     const globalSlots = Array.isArray(event.globalTimeSlots) ? event.globalTimeSlots : [];
@@ -268,13 +260,13 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       })
       .filter(id => id);
   }
+
   function getAvailableSlots(): TimeSlot[] {
     const globalSlots = Array.isArray(event.globalTimeSlots) ? event.globalTimeSlots : [];
     const booked = getBookedSlotIds();
     return globalSlots.filter(slot => !booked.includes(slot.id));
   }
 
-  // MODAL: CENTRATO viewport, oscura pagina, chiude dopo salvataggio/conferma
   const modalBg = "fixed inset-0 bg-black/70 flex items-center justify-center z-50";
   const modalBox = "bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary";
 
@@ -556,12 +548,10 @@ const TournamentView: React.FC<TournamentViewProps> = ({
           </div>
         )}
 
-        {/* ...rest of the tabs unchanged... */}
         {activeTab === 'participants' && !isOrganizer && (
           <ParticipantsTab event={event} tournament={tournament} loggedInPlayerId={loggedInPlayerId} />
         )}
 
-        {/* SLOT ORARI rimossa */}
         {activeTab === 'playoffs' && (
           <Playoffs event={event} tournament={tournament} setEvents={setEvents} />
         )}
