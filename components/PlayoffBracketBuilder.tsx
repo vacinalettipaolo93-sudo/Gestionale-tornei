@@ -11,14 +11,18 @@ interface PlayoffBracketBuilderProps {
 const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
     event, tournament, setEvents, isOrganizer
 }) => {
-    // Numero giocatori da impostazioni
+    // Ottieni il numero di qualificati dai settings, aggiornato live!
     const playoffPlayersCount = tournament.settings?.playoffPlayers || 16;
 
-    // Standings/classifica: usa la tua logica o quella vera, qui mostro un esempio base
-    const allRankings: { playerId: string, rank: number, fromGroup: string, groupName: string }[] = useMemo(() => {
+    // Calcola i giocatori con posizione e gruppo (puoi sostituire con la tua vera classifica)
+    const allRankings: {
+        playerId: string,
+        rank: number,
+        fromGroup: string,
+        groupName: string
+    }[] = useMemo(() => {
         let standingsArr: { playerId: string, rank: number, fromGroup: string, groupName: string }[] = [];
         tournament.groups.forEach(group => {
-            // Sostituisci con la tua funzione standings reale!
             group.playerIds.forEach((pid, idx) => {
                 standingsArr.push({
                     playerId: pid,
@@ -28,13 +32,11 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
                 });
             });
         });
-        // Ordina come vuoi la classifica (qui base sull'ordine dei gruppi)
-        // Sostituisci questa riga con la tua funzione vera per la classifica dei playoff!
-        standingsArr.sort((a, b) => a.rank - b.rank);
+        standingsArr.sort((a, b) => a.rank - b.rank); // Puoi usare la tua logica qui!
         return standingsArr.slice(0, playoffPlayersCount);
     }, [tournament, playoffPlayersCount]);
 
-    // Bracket size per playoff (prossima potenza di 2 dopo i qualificati)
+    // Calcola la bracketSize (prossima potenza di 2)
     const bracketSize = useMemo(() => {
         const numPlayers = allRankings.length;
         if (numPlayers < 2) return 0;
@@ -42,11 +44,14 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
     }, [allRankings]);
 
     const [firstRoundAssignments, setFirstRoundAssignments] = useState<(string | null)[]>([]);
+
+    // Aggiorna la bracket quando cambiano numPlayers/impostazioni
     useEffect(() => {
         setFirstRoundAssignments(Array(bracketSize).fill(null));
-    }, [allRankings, bracketSize]);
+    }, [bracketSize]);
 
-    const getPlayer = (id: string | null): Player | null => id ? event.players.find(p => p.id === id) ?? null : null;
+    const getPlayer = (id: string | null): Player | null =>
+        id ? event.players.find(p => p.id === id) ?? null : null;
 
     const handleAssignmentChange = (slotIndex: number, value: string) => {
         setFirstRoundAssignments(prev => {
@@ -60,19 +65,18 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
         });
     };
 
-    // Funzione per generare il tabellone
+    // Funzione per generare il tabellone (qui solo esempio, integralo con la tua logica firestore)
     const handleGenerateBracket = () => {
-        // Qui aggiorna il torneo con la nuova struttura! Solo esempio:
+        // Qui salvi il tabellone su Firestore, aggiorni Tournament.playoffs, ecc.
         console.log("Genera playoff bracket", firstRoundAssignments);
-        alert("Tabellone playoff generato! Implementa salvataggio qui.");
-        // Puoi mettere la logica di update nello stato e su Firestore come ConsolationBracket :-)
+        alert("Tabellone playoff generato! Collega qui la tua logica di salvataggio.");
     };
 
     const unassignedPlayers = allRankings.filter(q => !firstRoundAssignments.includes(q.playerId));
     const numByesAvailable = bracketSize - allRankings.length;
     const byesAssigned = firstRoundAssignments.filter(a => a === 'BYE').length;
 
-    // Slot assegnazione per la select
+    // Slot per assegnazione manuale
     const AssignmentSlot = ({ slotIndex }: { slotIndex: number }) => {
         const currentValue = firstRoundAssignments[slotIndex];
         const currentPlayer = getPlayer(currentValue);
@@ -83,7 +87,9 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
                 className="w-full bg-primary border border-tertiary rounded-lg p-2 text-text-primary focus:ring-2 focus:ring-accent"
             >
                 <option value="">-- Seleziona --</option>
-                {currentValue && currentValue !== 'BYE' && <option value={currentValue}>{currentPlayer?.name}</option>}
+                {currentValue && currentValue !== 'BYE' &&
+                    <option value={currentValue}>{currentPlayer?.name}</option>
+                }
                 {unassignedPlayers
                     .slice()
                     .sort((a, b) => {
@@ -94,7 +100,9 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
                     .map(q => (
                         <option key={q.playerId} value={q.playerId}>{getPlayer(q.playerId)?.name}</option>
                     ))}
-                {(byesAssigned < numByesAvailable || currentValue === 'BYE') && <option value="BYE">-- BYE --</option>}
+                {(byesAssigned < numByesAvailable || currentValue === 'BYE') &&
+                    <option value="BYE">-- BYE --</option>
+                }
             </select>
         );
     };
@@ -116,7 +124,11 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
                     )) : <p className="text-text-secondary">Nessun giocatore qualificato per il tabellone playoff.</p>}
                 </div>
                 <div className="mt-8">
-                    <button onClick={handleGenerateBracket} disabled={firstRoundAssignments.some(a => a === null) || allRankings.length < 2} className="w-full bg-highlight hover:bg-highlight/90 text-white font-bold py-3 rounded-lg transition-colors">
+                    <button
+                        onClick={handleGenerateBracket}
+                        disabled={firstRoundAssignments.some(a => a === null) || allRankings.length < 2}
+                        className="w-full bg-highlight hover:bg-highlight/90 text-white font-bold py-3 rounded-lg transition-colors"
+                    >
                         Genera Tabellone
                     </button>
                 </div>
@@ -126,9 +138,18 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
                 <h4 className="font-semibold text-xl mb-4 text-accent">Riepilogo</h4>
                 <div className="bg-primary/50 p-4 rounded-lg mb-6">
                     <div className="grid grid-cols-3 gap-4 text-center">
-                        <div><div className="text-2xl font-bold">{allRankings.length}</div><div className="text-sm text-text-secondary">Qualificati</div></div>
-                        <div><div className="text-2xl font-bold">{bracketSize}</div><div className="text-sm text-text-secondary">Posti</div></div>
-                        <div><div className="text-2xl font-bold">{numByesAvailable}</div><div className="text-sm text-text-secondary">Bye</div></div>
+                        <div>
+                            <div className="text-2xl font-bold">{allRankings.length}</div>
+                            <div className="text-sm text-text-secondary">Qualificati</div>
+                        </div>
+                        <div>
+                            <div className="text-2xl font-bold">{bracketSize}</div>
+                            <div className="text-sm text-text-secondary">Posti</div>
+                        </div>
+                        <div>
+                            <div className="text-2xl font-bold">{numByesAvailable}</div>
+                            <div className="text-sm text-text-secondary">Bye</div>
+                        </div>
                     </div>
                 </div>
                 <h4 className="font-semibold text-lg mb-3">Giocatori da Assegnare</h4>
@@ -144,8 +165,9 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
                             const player = getPlayer(q.playerId);
                             return (
                                 <div key={q.playerId} className="bg-tertiary/50 p-2 rounded-lg flex items-center gap-3">
-                                    {/* avatar */}
-                                    {player?.avatar && <img src={player.avatar} alt={player.name} className="w-8 h-8 rounded-full" />}
+                                    {player?.avatar && (
+                                        <img src={player.avatar} alt={player.name} className="w-8 h-8 rounded-full" />
+                                    )}
                                     <div>
                                         <div className="font-semibold text-sm">{player?.name}</div>
                                         <div className="text-xs text-text-secondary">{q.rank}° class. {q.groupName}</div>
