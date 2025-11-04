@@ -31,6 +31,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
   const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'participants' | 'playoffs' | 'consolation' | 'groups' | 'settings' | 'rules' | 'players'>('standings');
 
+  // Stati modali
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   const [score1, setScore1] = useState<string>("");
   const [score2, setScore2] = useState<string>("");
@@ -45,17 +46,36 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
   const [bookingError, setBookingError] = useState<string>("");
 
+  // Patch fondamentale: calcolo degli slot già prenotati!
+  function getAllBookedSlotIds(): string[] {
+    return event.tournaments.flatMap(tournament =>
+      tournament.groups
+        ? tournament.groups.flatMap(group =>
+            group.matches
+              .filter(match => match.slotId && (match.status === "scheduled" || match.status === "completed"))
+              .map(match => match.slotId!)
+          )
+        : []
+    );
+  }
+
+  function getAvailableSlots() {
+    const globalSlots = Array.isArray(event.globalTimeSlots) ? event.globalTimeSlots : [];
+    const booked = getAllBookedSlotIds();
+    return globalSlots.filter(slot => !booked.includes(slot.id));
+  }
+
   const handlePlayerContact = (player: { phone?: string }) => {
     if (player.phone)
       window.open(`https://wa.me/${player.phone.replace(/[^0-9]/g, "")}`, "_blank");
   };
 
+  // INSERISCI/MODIFICA RISULTATO
   const handleEditResult = (match: Match) => {
     setEditingMatch(match);
     setScore1(match.score1 !== null ? String(match.score1) : "");
     setScore2(match.score2 !== null ? String(match.score2) : "");
   };
-
   async function saveMatchResult(match: Match) {
     if (!selectedGroup) return;
     const updatedMatch = { ...match, score1: Number(score1), score2: Number(score2), status: "completed" };
@@ -86,6 +106,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     setScore2("");
   }
 
+  // ELIMINA RISULTATO
   async function deleteMatchResult(match: Match) {
     if (!selectedGroup) return;
     const updatedMatch: Match = {
@@ -119,17 +140,22 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     setDeletingMatch(null);
   }
 
+  // PRENOTA
   const handleBookMatch = (match: Match) => {
     setBookingMatch(match);
     setSelectedSlotId("");
     setBookingError("");
   };
-
   async function saveMatchBooking(match: Match) {
     if (!selectedGroup) return;
     const globalSlots = Array.isArray(event.globalTimeSlots) ? event.globalTimeSlots : [];
+    const allBookedSlotIds = getAllBookedSlotIds();
     if (!selectedSlotId) {
       setBookingError("Seleziona uno slot orario.");
+      return;
+    }
+    if (allBookedSlotIds.includes(selectedSlotId)) {
+      setBookingError("Slot già prenotato, scegli un altro slot.");
       return;
     }
     const timeSlot = globalSlots.find(s => s.id === selectedSlotId);
@@ -146,9 +172,11 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       ...match,
       status: "scheduled",
       scheduledTime: dateObj.toISOString(),
+      slotId: timeSlot.id,
       location: timeSlot.location ?? "",
       field: timeSlot.field ?? (timeSlot.location ?? ""),
     };
+
     const updatedGroups = tournament.groups.map(g =>
       g.id === selectedGroup.id
         ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) }
@@ -175,20 +203,26 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     setBookingError("");
   }
 
+  // MODIFICA PRENOTAZIONE
   const handleRescheduleMatch = (match: Match) => {
     setReschedulingMatch(match);
     setRescheduleSlotId("");
   };
-
   async function saveRescheduleMatch(match: Match) {
     if (!selectedGroup) return;
     const globalSlots = Array.isArray(event.globalTimeSlots) ? event.globalTimeSlots : [];
+    const allBookedSlotIds = getAllBookedSlotIds();
     if (!rescheduleSlotId) return;
+    if (allBookedSlotIds.includes(rescheduleSlotId)) {
+      setBookingError("Slot già prenotato da un'altra partita.");
+      return;
+    }
     const timeSlot = globalSlots.find(s => s.id === rescheduleSlotId);
     const dateObj = timeSlot ? new Date(timeSlot.start) : null;
     const updatedMatch: Match = {
       ...match,
       scheduledTime: timeSlot?.start ? dateObj?.toISOString() ?? "" : "",
+      slotId: timeSlot?.id ?? "",
       location: timeSlot?.location ?? "",
       field: timeSlot?.field ?? (timeSlot?.location ?? ""),
     };
@@ -215,14 +249,17 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     });
     setReschedulingMatch(null);
     setRescheduleSlotId("");
+    setBookingError("");
   }
 
+  // ANNULLA PRENOTAZIONE
   async function handleCancelBooking(match: Match) {
     if (!selectedGroup) return;
     const updatedMatch: Match = {
       ...match,
       status: "pending",
       scheduledTime: undefined,
+      slotId: undefined,
       location: "",
       field: "",
     };
@@ -247,24 +284,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     await updateDoc(doc(db, "events", event.id), {
       tournaments: updatedTournaments
     });
-  }
-
-  function getBookedSlotIds(): string[] {
-    if (!selectedGroup) return [];
-    const globalSlots = Array.isArray(event.globalTimeSlots) ? event.globalTimeSlots : [];
-    return selectedGroup.matches
-      .filter(m => m.status === "scheduled" && m.scheduledTime)
-      .map(m => {
-        const found = globalSlots.find(s => String(new Date(s.start).toISOString()) === String(m.scheduledTime));
-        return found?.id ?? "";
-      })
-      .filter(id => id);
-  }
-
-  function getAvailableSlots(): TimeSlot[] {
-    const globalSlots = Array.isArray(event.globalTimeSlots) ? event.globalTimeSlots : [];
-    const booked = getBookedSlotIds();
-    return globalSlots.filter(slot => !booked.includes(slot.id));
   }
 
   const modalBg = "fixed inset-0 bg-black/70 flex items-center justify-center z-50";
@@ -483,7 +502,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
                       <option value="">Seleziona uno slot</option>
                       {getAvailableSlots().map(slot => (
                         <option key={slot.id} value={slot.id}>
-                          {new Date(slot.start).toLocaleString("it-IT")} {slot.location ? `- ${slot.location}` : ""}
+                          {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
                         </option>
                       ))}
                     </select>
@@ -522,7 +541,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
                       <option value="">Seleziona uno slot</option>
                       {getAvailableSlots().map(slot => (
                         <option key={slot.id} value={slot.id}>
-                          {new Date(slot.start).toLocaleString("it-IT")} {slot.location ? `- ${slot.location}` : ""}
+                          {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
                         </option>
                       ))}
                     </select>
