@@ -565,7 +565,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
           <ParticipantsTab event={event} tournament={tournament} loggedInPlayerId={loggedInPlayerId} />
         )}
 
-        {/* PATCH: Usare lo stesso costruttore come consolazione per play-off */}
         {activeTab === 'playoffs' && isOrganizer && (
           <PlayoffBracketBuilder
             event={event}
@@ -597,7 +596,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
             {event.rules?.trim()
               ? <div className="bg-primary p-4 rounded-lg border border-tertiary">{event.rules}</div>
               : <p className="text-text-secondary">Nessun regolamento inserito dall'organizzatore.</p>}
-            {/* AGGIUNTA: regolamento specifico del girone */}
             <div className="mt-8">
               <h3 className="text-xl font-bold mb-4 text-accent">
                 Regolamento Girone: {selectedGroup?.name}
