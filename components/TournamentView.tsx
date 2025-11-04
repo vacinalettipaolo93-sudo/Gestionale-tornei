@@ -284,6 +284,20 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     });
   }
 
+  // --- INIZIO MODIFICA: FILTRO PARTITE PRENOTATE ---
+  // Mostra solo le partite realmente prenotate (scheduled/booked, slotId e scheduledTime presenti)
+  const bookedMatches = selectedGroup?.matches
+    ? selectedGroup.matches.filter(
+        m =>
+          (m.status === "booked" || m.status === "scheduled") &&
+          m.slotId !== undefined &&
+          m.slotId !== null &&
+          m.scheduledTime !== undefined &&
+          m.scheduledTime !== null
+      )
+    : [];
+  // --- FINE MODIFICA ---
+
   const modalBg = "fixed inset-0 bg-black/70 flex items-center justify-center z-50";
   const modalBox = "bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary";
 
@@ -291,7 +305,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     <div>
       {/* Tabs menu */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {/* ...Bottoni tab identici a quelli delle risposte sopra... */}
+        {/* ...Bottoni tab... */}
         <button onClick={() => setActiveTab('standings')}
           className={`px-4 py-2 rounded-full ${activeTab === 'standings'
             ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
@@ -407,6 +421,33 @@ const TournamentView: React.FC<TournamentViewProps> = ({
         {activeTab === 'matches' && selectedGroup && (
           <div>
             <h3 className="text-xl font-bold mb-3 text-accent">{selectedGroup.name}</h3>
+            {/* --- INIZIO BLOCCO VISUALIZZAZIONE PARTITE PRENOTATE --- */}
+            <div className="mb-6">
+              <h4 className="font-semibold text-md text-accent mb-2">Partite prenotate</h4>
+              {bookedMatches.length === 0 ? (
+                <p className="text-text-secondary">Nessuna partita prenotata.</p>
+              ) : (
+                bookedMatches.map(match => (
+                  <div key={match.id} className="flex items-center gap-3 mb-2">
+                    <span>
+                      {event.players.find(p => p.id === match.player1Id)?.name} vs {event.players.find(p => p.id === match.player2Id)?.name}
+                    </span>
+                    <span>
+                      {match.scheduledTime ? new Date(match.scheduledTime).toLocaleString("it-IT") : ""}
+                    </span>
+                    <button
+                      className="bg-red-500 px-3 py-1 rounded text-white font-semibold"
+                      onClick={() => handleCancelBooking(match)}
+                    >
+                      Annulla prenotazione
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            {/* --- FINE BLOCCO PARTITE PRENOTATE --- */}
+
+            {/* Partite tutte (MatchList rimane invariato) */}
             <MatchList
               group={selectedGroup}
               players={event.players}
