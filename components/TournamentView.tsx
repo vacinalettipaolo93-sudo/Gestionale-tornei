@@ -285,15 +285,10 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     // Se hai modal/variabile tipo setCancellingMatch(null), aggiungila qui!
   }
 
-  const modalBg = "fixed inset-0 bg-black/70 flex items-center justify-center z-50";
-  const modalBox = "bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary";
-
-  // --- INIZIO PATCH: fix Playoff tab ---
-  // Funzione di esempio per la generazione del tabellone playoff
+  // --- INIZIO PATCH: Playoff Tab ---
+  // Funzione per generare il tabellone playoff
   const handleGeneraPlayoffBracket = async () => {
     if (!tournament.groups.length) return;
-    // Qui va la logica che vuoi per generare il bracket. Metto un esempio vuoto.
-    // Devi adattare secondo la tua logica di generazione reale.
     const playoffs = {
       isGenerated: true,
       matches: [],
@@ -319,7 +314,32 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       ),
     });
   };
+
+  // Funzione per annullare la generazione del tabellone playoff
+  const handleCancellaPlayoffBracket = async () => {
+    const updatedTournament = { ...tournament, playoffs: null };
+    setEvents(prevEvents =>
+      prevEvents.map(e =>
+        e.id === event.id
+          ? {
+              ...e,
+              tournaments: e.tournaments.map(t =>
+                t.id === tournament.id ? updatedTournament : t
+              ),
+            }
+          : e
+      )
+    );
+    await updateDoc(doc(db, "events", event.id), {
+      tournaments: event.tournaments.map(t =>
+        t.id === tournament.id ? updatedTournament : t
+      ),
+    });
+  };
   // --- FINE PATCH ---
+
+  const modalBg = "fixed inset-0 bg-black/70 flex items-center justify-center z-50";
+  const modalBox = "bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary";
 
   return (
     <div>
@@ -606,14 +626,24 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
         {activeTab === 'playoffs' && (
           <div className="bg-secondary p-6 rounded-xl shadow-lg max-w-3xl mx-auto">
-            {isOrganizer && !(tournament.playoffs?.isGenerated) && (
+            {isOrganizer && !tournament.playoffs?.isGenerated && (
               <div className="mb-6">
                 <h3 className="text-lg font-bold mb-2">Genera tabellone playoff</h3>
                 <button
-                  className="bg-highlight text-white py-2 px-4 rounded-lg font-semibold"
+                  className="bg-highlight text-white py-2 px-4 rounded-lg font-semibold mr-3"
                   onClick={handleGeneraPlayoffBracket}
                 >
                   Genera Playoff
+                </button>
+              </div>
+            )}
+            {isOrganizer && tournament.playoffs?.isGenerated && (
+              <div className="flex gap-3 mb-6">
+                <button
+                  className="bg-red-600 text-white py-2 px-4 rounded-lg font-semibold"
+                  onClick={handleCancellaPlayoffBracket}
+                >
+                  Annulla Playoff
                 </button>
               </div>
             )}
