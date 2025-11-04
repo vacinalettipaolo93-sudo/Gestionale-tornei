@@ -250,7 +250,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     setBookingError("");
   }
 
-  // ANNULLA PRENOTAZIONE
+  // ANNULLA PRENOTAZIONE - QUESTA È LA FUNZIONE CON LA CORREZIONE!
   async function handleCancelBooking(match: Match) {
     if (!selectedGroup) return;
     const updatedMatch: Match = {
