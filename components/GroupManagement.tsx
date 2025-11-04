@@ -190,6 +190,8 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
             });
 
             setIsAddOpen(false);
+            setNewGroupName('');
+            setNewGroupSize(4);
         } catch (err: any) {
             console.error('Errore aggiunta girone', err);
             setError(err?.message || 'Errore durante la creazione del girone');
@@ -373,6 +375,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                     </div>
                 </div>
             ))}
+
             {tournament.groups.length === 0 && (
                 <p className="text-center text-text-secondary py-8">Crea un girone per iniziare la gestione.</p>
             )}
@@ -404,6 +407,34 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                         <div className="flex justify-end gap-4">
                             <button onClick={() => { setIsEditOpen(false); setEditingGroup(null); }} className="bg-tertiary px-4 py-2 rounded">Annulla</button>
                             <button onClick={handleSaveEditGroup} disabled={loading} className="bg-highlight text-white px-4 py-2 rounded">{loading ? 'Salvando...' : 'Salva Modifica'}</button>
+                        </div>
+                        {error && <div className="text-red-400 mt-2">{error}</div>}
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: AGGIUNGI GIRONE */}
+            {isAddOpen && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
+                    <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-sm border border-tertiary">
+                        <h4 className="text-lg font-bold mb-4">Aggiungi nuovo Girone</h4>
+                        <input
+                            value={newGroupName}
+                            onChange={e => setNewGroupName(e.target.value)}
+                            placeholder="Nome girone"
+                            className="w-full mb-2 p-2 rounded bg-primary border"
+                            autoFocus
+                        />
+                        <div className="text-sm text-text-secondary mb-2">Il nuovo girone partirà senza giocatori e senza partite.</div>
+                        <div className="flex justify-end gap-4 mt-4">
+                            <button onClick={() => setIsAddOpen(false)} className="bg-tertiary px-4 py-2 rounded">Annulla</button>
+                            <button 
+                                onClick={handleAddGroup} 
+                                disabled={loading || !newGroupName.trim()} 
+                                className="bg-highlight text-white px-4 py-2 rounded font-bold"
+                            >
+                                {loading ? "Creando..." : "Crea Girone"}
+                            </button>
                         </div>
                         {error && <div className="text-red-400 mt-2">{error}</div>}
                     </div>
