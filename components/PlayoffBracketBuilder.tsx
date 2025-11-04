@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { type Event, type Tournament, type Player } from '../types';
+import { calculateStandings } from '../utils/standings';
 
 interface PlayoffBracketBuilderProps {
     event: Event;
@@ -11,36 +12,36 @@ interface PlayoffBracketBuilderProps {
 const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
     event, tournament, setEvents, isOrganizer
 }) => {
-    // Dinamico: legge sempre da tournament.settings.playoffPlayers!
-    const playoffPlayersCount = tournament.settings?.playoffPlayers || 16;
-
-    // Ottieni standings/classifica reale del torneo/gironi -- qui puoi mettere la tua logica vera!
-    const allRankings = useMemo(() => {
-        let standingsArr: { playerId: string, rank: number, fromGroup: string, groupName: string }[] = [];
-        tournament.groups.forEach(group => {
-            group.playerIds.forEach((pid, idx) => {
-                standingsArr.push({
-                    playerId: pid,
+    // ------------- LOGICA QUALIFICATI PLAYOFF come Consolation ma con playoffSettings! -------------
+    const qualifiers = useMemo(() => {
+        const allQualifiers: { playerId: string, rank: number, fromGroup: string, groupName: string }[] = [];
+        (tournament.groups ?? []).forEach(group => {
+            const setting = tournament.settings.playoffSettings?.find(s => s.groupId === group.id);
+            const num = setting?.numQualifiers ?? 0;
+            if (num > 0) {
+                // Calcola la classifica reale del girone
+                const standings = calculateStandings(group, event.players, tournament.settings);
+                const groupQualifiers = standings.slice(0, num).map((entry, idx) => ({
+                    playerId: entry.playerId,
                     rank: idx + 1,
                     fromGroup: group.id,
                     groupName: group.name
-                });
-            });
+                }));
+                allQualifiers.push(...groupQualifiers);
+            }
         });
-        standingsArr.sort((a, b) => a.rank - b.rank);
-        return standingsArr.slice(0, playoffPlayersCount);
-    }, [tournament.groups, event.players, playoffPlayersCount]);
+        return allQualifiers;
+    }, [tournament.groups, event.players, tournament.settings]);
 
-    // Calcolatore bracketSize live
+    // Bracket size: next power of 2
     const bracketSize = useMemo(() => {
-        const numPlayers = allRankings.length;
+        const numPlayers = qualifiers.length;
         if (numPlayers < 2) return 0;
         return 2 ** Math.ceil(Math.log2(numPlayers));
-    }, [allRankings]);
+    }, [qualifiers]);
 
     const [firstRoundAssignments, setFirstRoundAssignments] = useState<(string | null)[]>([]);
 
-    // Reset/aggiornamento live ogni volta che cambiano i settings o i ranking
     useEffect(() => {
         setFirstRoundAssignments(Array(bracketSize).fill(null));
     }, [bracketSize]);
@@ -60,17 +61,18 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
         });
     };
 
-    // Funzione per generare il tabellone (adatta la logica al tuo stato/Firestore)
+    // Funzione per generare il tabellone (implementa la logica firestore secondo il tuo progetto)
     const handleGenerateBracket = () => {
+        // Qui salvi il bracket su firestore/torneo
         console.log("Genera playoff bracket", firstRoundAssignments);
-        alert("Tabellone playoff generato! Collega qui la tua logica di salvataggio.");
+        alert("Tabellone playoff generato! (collega qui il salvataggio Firestore)");
     };
 
-    const unassignedPlayers = allRankings.filter(q => !firstRoundAssignments.includes(q.playerId));
-    const numByesAvailable = bracketSize - allRankings.length;
+    const unassignedPlayers = qualifiers.filter(q => !firstRoundAssignments.includes(q.playerId));
+    const numByesAvailable = bracketSize - qualifiers.length;
     const byesAssigned = firstRoundAssignments.filter(a => a === 'BYE').length;
 
-    // Select per assegnare
+    // Select per assegnazione
     const AssignmentSlot = ({ slotIndex }: { slotIndex: number }) => {
         const currentValue = firstRoundAssignments[slotIndex];
         const currentPlayer = getPlayer(currentValue);
@@ -120,7 +122,7 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
                 <div className="mt-8">
                     <button
                         onClick={handleGenerateBracket}
-                        disabled={firstRoundAssignments.some(a => a === null) || allRankings.length < 2}
+                        disabled={firstRoundAssignments.some(a => a === null) || qualifiers.length < 2}
                         className="w-full bg-highlight hover:bg-highlight/90 text-white font-bold py-3 rounded-lg transition-colors"
                     >
                         Genera Tabellone
@@ -133,7 +135,7 @@ const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
                 <div className="bg-primary/50 p-4 rounded-lg mb-6">
                     <div className="grid grid-cols-3 gap-4 text-center">
                         <div>
-                            <div className="text-2xl font-bold">{allRankings.length}</div>
+                            <div className="text-2xl font-bold">{qualifiers.length}</div>
                             <div className="text-sm text-text-secondary">Qualificati</div>
                         </div>
                         <div>
