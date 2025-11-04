@@ -8,116 +8,9 @@ import TournamentSettings from './TournamentSettings';
 import Playoffs from './Playoffs';
 import ConsolationBracket from './ConsolationBracket';
 import PlayerManagement from './PlayerManagement';
+import PlayoffBracketBuilder from './PlayoffBracketBuilder';
 import { db } from "../firebase";
 import { updateDoc, doc } from "firebase/firestore";
-
-// --- PlayoffBracketBuilder costruzione tabellone stile consolazione ---
-const PlayoffBracketBuilder: React.FC<{
-  assignedPlayers: Player[];
-  matchCount: number;
-  showThirdPlace?: boolean;
-  onAssign: (assignments: { [matchId: string]: [string | null, string | null] }) => void;
-}> = ({ assignedPlayers, matchCount, showThirdPlace, onAssign }) => {
-  const [assignments, setAssignments] = useState<{ [m: string]: [string | null, string | null] }>({});
-
-  const tableRows = [];
-  for (let i = 1; i <= matchCount; i++) {
-    const matchId = `M${i}`;
-    tableRows.push(
-      <div key={matchId} className="flex gap-3 mb-3">
-        <select
-          className="bg-primary rounded px-2 py-1 grow"
-          value={assignments[matchId]?.[0] || ""}
-          onChange={e => setAssignments(a => ({ ...a, [matchId]: [e.target.value, a[matchId]?.[1] || null] }))}
-        >
-          <option value="">-- Seleziona --</option>
-          {assignedPlayers.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-        <span className="font-bold text-white mx-3">vs</span>
-        <select
-          className="bg-primary rounded px-2 py-1 grow"
-          value={assignments[matchId]?.[1] || ""}
-          onChange={e => setAssignments(a => ({ ...a, [matchId]: [a[matchId]?.[0] || null, e.target.value] }))}
-        >
-          <option value="">-- Seleziona --</option>
-          {assignedPlayers.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-      </div>
-    );
-  }
-
-  // Optionally add third place match
-  if (showThirdPlace) {
-    tableRows.push(
-      <div key="thirdPlace" className="flex gap-3 mb-3 border-t border-tertiary pt-5 mt-5">
-        <span className="font-semibold text-accent min-w-[80px]">Finale 3° posto:</span>
-        <select
-          className="bg-primary rounded px-2 py-1 grow"
-          value={assignments["thirdPlace"]?.[0] || ""}
-          onChange={e => setAssignments(a => ({ ...a, ["thirdPlace"]: [e.target.value, a["thirdPlace"]?.[1] || null] }))}
-        >
-          <option value="">-- Seleziona --</option>
-          {assignedPlayers.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-        <span className="font-bold text-white mx-3">vs</span>
-        <select
-          className="bg-primary rounded px-2 py-1 grow"
-          value={assignments["thirdPlace"]?.[1] || ""}
-          onChange={e => setAssignments(a => ({ ...a, ["thirdPlace"]: [a["thirdPlace"]?.[0] || null, e.target.value] }))}
-        >
-          <option value="">-- Seleziona --</option>
-          {assignedPlayers.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-      </div>
-    );
-  }
-
-  const assignedIds = Object.values(assignments).flat().filter(Boolean);
-  const toAssign = assignedPlayers.filter(p => !assignedIds.includes(p.id));
-
-  return (
-    <div className="flex flex-wrap gap-8">
-      <div className="flex-grow">
-        <h3 className="text-xl font-bold mb-2 text-accent">Costruttore Tabellone Playoff</h3>
-        <div className="text-text-secondary mb-4">
-          Assegna manualmente i giocatori agli incontri del primo turno playoff.
-        </div>
-        {tableRows}
-        <button
-          className="bg-highlight text-white px-4 py-2 mt-4 rounded font-bold"
-          onClick={() => onAssign(assignments)}
-        >
-          Genera Tabellone
-        </button>
-      </div>
-      <div className="min-w-[240px]">
-        <h4 className="text-lg font-bold mb-3">Riepilogo</h4>
-        <div className="mb-3">
-          <span className="block text-sm text-text-secondary">Qualificati: <span className="font-bold">{assignedPlayers.length}</span></span>
-          <span className="block text-sm text-text-secondary">Posti: <span className="font-bold">{matchCount * 2}</span></span>
-          <span className="block text-sm text-text-secondary">Bye: <span className="font-bold">{(matchCount * 2) - assignedPlayers.length}</span></span>
-        </div>
-        <h5 className="text-sm font-bold mb-2">Giocatori da Assegnare</h5>
-        <ul>
-          {toAssign.map(p =>
-            <li key={p.id} className="mb-2 flex gap-2 items-center text-white font-semibold">
-              <span className="bg-tertiary px-2 py-1 rounded-full">{p.name}</span>
-            </li>
-          )}
-        </ul>
-      </div>
-    </div>
-  );
-};
-// --- Fine Costruttore tabellone playoff ---
 
 interface TournamentViewProps {
   event: Event;
@@ -390,38 +283,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     await updateDoc(doc(db, "events", event.id), {
       tournaments: updatedTournaments
     });
-    // Se hai modal/variabile tipo setCancellingMatch(null), aggiungila qui!
-  }
-
-  // --- PLAYOFF: solo giocatori assegnati a questo torneo e rispettando impostazioni ---
-  // Ottieni il numero di giocatori playoff dalle impostazioni
-  const playoffPlayersCount = tournament.settings.playoffPlayers || 16;
-
-  // Ottieni l'impostazione finale 3°-4° posto
-  const hasThirdPlace = tournament.settings.thirdPlaceFinal ?? false;
-
-  // Trova tutti playerIds assegnati ai gruppi di questo torneo
-  const tournamentPlayerIds = tournament.groups.reduce<string[]>(
-    (ids, group) => ids.concat(group.playerIds),
-    []
-  );
-  const uniqueTournamentPlayerIds = Array.from(new Set(tournamentPlayerIds));
-
-  // Ordina i giocatori (qui puoi mettere la tua logica di classifica, esempio ora prende come vengono nei gruppi)
-  const playoffQualifiedPlayers: Player[] = uniqueTournamentPlayerIds
-    .map(id => event.players.find(p => p.id === id))
-    .filter(Boolean)
-    .slice(0, playoffPlayersCount) as Player[];
-
-  // Numero match primo turno playoff (rispetta players impostati)
-  const playoffMatchesCount = Math.ceil(playoffPlayersCount / 2);
-
-  // Funzione per gestire la generazione su assegnamento manuale (adatta secondo i tuoi dati reali)
-  function handleAssignPlayoffBracket(assignments: { [matchId: string]: [string | null, string | null] }) {
-    // Qui la tua logica per salvare il tabellone costruito!
-    // Esempio console:
-    console.log("Playoff bracket assignments:", assignments);
-    // Potresti qui chiamare un setEvents che aggiorna il bracket in firestore.
   }
 
   const modalBg = "fixed inset-0 bg-black/70 flex items-center justify-center z-50";
@@ -431,7 +292,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     <div>
       {/* Tabs menu */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {/* ...Bottoni tab identici a quelli delle risposte sopra... */}
         <button onClick={() => setActiveTab('standings')}
           className={`px-4 py-2 rounded-full ${activeTab === 'standings'
             ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
@@ -561,7 +421,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
               viewingOwnGroup={selectedGroup.playerIds.includes(loggedInPlayerId ?? "")}
             />
 
-            {/* Modale INSERISCI/MODIFICA RISULTATO */}
             {editingMatch && (
               <div className={modalBg}>
                 <div className={modalBox}>
@@ -603,7 +462,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
               </div>
             )}
 
-            {/* Modale ELIMINA RISULTATO */}
             {deletingMatch && (
               <div className={modalBg}>
                 <div className={modalBox}>
@@ -626,7 +484,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
               </div>
             )}
 
-            {/* Modale PRENOTA */}
             {bookingMatch && (
               <div className={modalBg}>
                 <div className={modalBox}>
@@ -665,7 +522,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
               </div>
             )}
 
-            {/* Modale MODIFICA PRENOTAZIONE */}
             {reschedulingMatch && (
               <div className={modalBg}>
                 <div className={modalBox}>
@@ -702,7 +558,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
                 </div>
               </div>
             )}
-
           </div>
         )}
 
@@ -710,15 +565,14 @@ const TournamentView: React.FC<TournamentViewProps> = ({
           <ParticipantsTab event={event} tournament={tournament} loggedInPlayerId={loggedInPlayerId} />
         )}
 
+        {/* PATCH: Usare lo stesso costruttore come consolazione per play-off */}
         {activeTab === 'playoffs' && isOrganizer && (
-          <div className="bg-secondary p-6 rounded-xl shadow-lg max-w-5xl mx-auto">
-            <PlayoffBracketBuilder
-              assignedPlayers={playoffQualifiedPlayers}
-              matchCount={playoffMatchesCount}
-              showThirdPlace={hasThirdPlace}
-              onAssign={handleAssignPlayoffBracket}
-            />
-          </div>
+          <PlayoffBracketBuilder
+            event={event}
+            tournament={tournament}
+            setEvents={setEvents}
+            isOrganizer={isOrganizer}
+          />
         )}
         {activeTab === 'playoffs' && !isOrganizer && tournament.playoffs?.isGenerated && (
           <div className="bg-secondary p-6 rounded-xl shadow-lg max-w-3xl mx-auto">
