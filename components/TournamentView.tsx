@@ -250,14 +250,14 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     setBookingError("");
   }
 
-  // ANNULLA PRENOTAZIONE - QUESTA È LA FUNZIONE CON LA CORREZIONE!
+  // ANNULLA PRENOTAZIONE – Modificata qui (LOGICA SICURA!)
   async function handleCancelBooking(match: Match) {
     if (!selectedGroup) return;
     const updatedMatch: Match = {
       ...match,
       status: "pending",
-      scheduledTime: undefined,
-      slotId: undefined,
+      scheduledTime: null,
+      slotId: null,
       location: "",
       field: "",
     };
@@ -282,6 +282,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     await updateDoc(doc(db, "events", event.id), {
       tournaments: updatedTournaments
     });
+    // Se hai modal/variabile tipo setCancellingMatch(null), aggiungila qui!
   }
 
   const modalBg = "fixed inset-0 bg-black/70 flex items-center justify-center z-50";
