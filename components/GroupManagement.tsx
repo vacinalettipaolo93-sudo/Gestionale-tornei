@@ -8,11 +8,12 @@ interface GroupManagementProps {
     event: Event;
     tournament: Tournament;
     setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
+    isOrganizer: boolean;
 }
 
 const makeId = () => `${Date.now()}${Math.floor(Math.random() * 10000)}`;
 
-const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, setEvents }) => {
+const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, setEvents, isOrganizer }) => {
     const [assigningGroup, setAssigningGroup] = useState<Group | null>(null);
     const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
     const [playerToRemove, setPlayerToRemove] = useState<{player: Player, group: Group} | null>(null);
@@ -350,7 +351,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                                                 <img src={player.avatar} alt={player.name} className="w-8 h-8 rounded-full flex-shrink-0 object-cover" />
                                                 <span className="text-sm font-medium truncate">{player.name}</span>
                                             </div>
-                                            <button onClick={() => setPlayerToRemove({player, group})} className="opacity-0 group-hover/player:opacity-100 text-text-secondary/50 hover:text-red-500 tra[...]
+                                            <button onClick={() => setPlayerToRemove({player, group})} className="opacity-0 group-hover/player:opacity-100 text-text-secondary/50 hover:text-red-500 transition-colors">
                                                 <TrashIcon className="w-4 h-4" />
                                             </button>
                                         </li>
@@ -389,7 +390,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                             autoFocus
                         />
                         <label className="text-sm text-text-secondary">Numero attuale di giocatori: {editingGroup.playerIds.length}</label>
-                        <p className="text-sm text-text-secondary mb-2">Per modificare i giocatori usa "Assegna Giocatori". Ridurre il numero rimuoverà i giocatori oltre la dimensione scelta e le lor[...]
+                        <p className="text-sm text-text-secondary mb-2">Per modificare i giocatori usa "Assegna Giocatori". Ridurre il numero rimuoverà i giocatori oltre la dimensione scelta e le loro partite.</p>
                         <div className="mb-2">
                             <label className="text-sm text-text-secondary">Regolamento del girone</label>
                             <textarea
@@ -418,7 +419,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                         {error && <div className="text-red-400 mt-2">{error}</div>}
                         <div className="flex justify-end gap-4 mt-6">
                             <button onClick={() => { setIsDeleteOpen(false); setGroupToDelete(null); }} className="bg-tertiary px-4 py-2 rounded">Annulla</button>
-                            <button onClick={handleDeleteGroup} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">{loading ? 'Eliminando...' : 'Elimina Girone'}</[...]
+                            <button onClick={handleDeleteGroup} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">{loading ? 'Eliminando...' : 'Elimina Girone'}</button>
                         </div>
                     </div>
                 </div>
