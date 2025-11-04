@@ -15,8 +15,9 @@ import { updateDoc, doc } from "firebase/firestore";
 const PlayoffBracketBuilder: React.FC<{
   assignedPlayers: Player[];
   matchCount: number;
+  showThirdPlace?: boolean;
   onAssign: (assignments: { [matchId: string]: [string | null, string | null] }) => void;
-}> = ({ assignedPlayers, matchCount, onAssign }) => {
+}> = ({ assignedPlayers, matchCount, showThirdPlace, onAssign }) => {
   const [assignments, setAssignments] = useState<{ [m: string]: [string | null, string | null] }>({});
 
   const tableRows = [];
@@ -39,6 +40,36 @@ const PlayoffBracketBuilder: React.FC<{
           className="bg-primary rounded px-2 py-1 grow"
           value={assignments[matchId]?.[1] || ""}
           onChange={e => setAssignments(a => ({ ...a, [matchId]: [a[matchId]?.[0] || null, e.target.value] }))}
+        >
+          <option value="">-- Seleziona --</option>
+          {assignedPlayers.map(p => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  // Optionally add third place match
+  if (showThirdPlace) {
+    tableRows.push(
+      <div key="thirdPlace" className="flex gap-3 mb-3 border-t border-tertiary pt-5 mt-5">
+        <span className="font-semibold text-accent min-w-[80px]">Finale 3° posto:</span>
+        <select
+          className="bg-primary rounded px-2 py-1 grow"
+          value={assignments["thirdPlace"]?.[0] || ""}
+          onChange={e => setAssignments(a => ({ ...a, ["thirdPlace"]: [e.target.value, a["thirdPlace"]?.[1] || null] }))}
+        >
+          <option value="">-- Seleziona --</option>
+          {assignedPlayers.map(p => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+        <span className="font-bold text-white mx-3">vs</span>
+        <select
+          className="bg-primary rounded px-2 py-1 grow"
+          value={assignments["thirdPlace"]?.[1] || ""}
+          onChange={e => setAssignments(a => ({ ...a, ["thirdPlace"]: [a["thirdPlace"]?.[0] || null, e.target.value] }))}
         >
           <option value="">-- Seleziona --</option>
           {assignedPlayers.map(p => (
@@ -362,16 +393,28 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     // Se hai modal/variabile tipo setCancellingMatch(null), aggiungila qui!
   }
 
-  // --- PLAYOFF: solo giocatori assegnati a questo torneo ---
+  // --- PLAYOFF: solo giocatori assegnati a questo torneo e rispettando impostazioni ---
+  // Ottieni il numero di giocatori playoff dalle impostazioni
+  const playoffPlayersCount = tournament.settings.playoffPlayers || 16;
+
+  // Ottieni l'impostazione finale 3°-4° posto
+  const hasThirdPlace = tournament.settings.thirdPlaceFinal ?? false;
+
+  // Trova tutti playerIds assegnati ai gruppi di questo torneo
   const tournamentPlayerIds = tournament.groups.reduce<string[]>(
     (ids, group) => ids.concat(group.playerIds),
     []
   );
   const uniqueTournamentPlayerIds = Array.from(new Set(tournamentPlayerIds));
-  const playoffQualifiedPlayers: Player[] = event.players.filter(p => uniqueTournamentPlayerIds.includes(p.id));
 
-  // Numero match primo turno playoff (adatta secondo le impostazioni torneo/playoff)
-  const playoffMatchesCount = 8;
+  // Ordina i giocatori (qui puoi mettere la tua logica di classifica, esempio ora prende come vengono nei gruppi)
+  const playoffQualifiedPlayers: Player[] = uniqueTournamentPlayerIds
+    .map(id => event.players.find(p => p.id === id))
+    .filter(Boolean)
+    .slice(0, playoffPlayersCount) as Player[];
+
+  // Numero match primo turno playoff (rispetta players impostati)
+  const playoffMatchesCount = Math.ceil(playoffPlayersCount / 2);
 
   // Funzione per gestire la generazione su assegnamento manuale (adatta secondo i tuoi dati reali)
   function handleAssignPlayoffBracket(assignments: { [matchId: string]: [string | null, string | null] }) {
@@ -672,6 +715,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
             <PlayoffBracketBuilder
               assignedPlayers={playoffQualifiedPlayers}
               matchCount={playoffMatchesCount}
+              showThirdPlace={hasThirdPlace}
               onAssign={handleAssignPlayoffBracket}
             />
           </div>
