@@ -1,82 +1,158 @@
-import React, { useState } from "react";
-import { type Player, type Group } from "../types";
+import React, { useState, useMemo, useEffect } from 'react';
+import { type Event, type Tournament, type Player } from '../types';
 
-// Props: players da assegnare, numero match/tabellone, callback
-const PlayoffBracketBuilder: React.FC<{
-  assignedPlayers: Player[];
-  matchCount: number;
-  onAssign: (assignments: { [matchId: string]: [string | null, string | null] }) => void;
-}> = ({ assignedPlayers, matchCount, onAssign }) => {
-  const [assignments, setAssignments] = useState<{ [m: string]: [string | null, string | null] }>({});
+interface PlayoffBracketBuilderProps {
+    event: Event;
+    tournament: Tournament;
+    setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
+    isOrganizer: boolean;
+}
 
-  // Genera la tabella dei match
-  const tableRows = [];
-  for (let i = 1; i <= matchCount; i++) {
-    const matchId = `M${i}`;
-    tableRows.push(
-      <div key={matchId} className="flex gap-3 mb-3">
-        <select
-          className="bg-primary rounded px-2 py-1 grow"
-          value={assignments[matchId]?.[0] || ""}
-          onChange={e => setAssignments(a => ({ ...a, [matchId]: [e.target.value, a[matchId]?.[1] || null] }))}
-        >
-          <option value="">-- Seleziona --</option>
-          {assignedPlayers.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-        <span className="font-bold text-white mx-3">vs</span>
-        <select
-          className="bg-primary rounded px-2 py-1 grow"
-          value={assignments[matchId]?.[1] || ""}
-          onChange={e => setAssignments(a => ({ ...a, [matchId]: [a[matchId]?.[0] || null, e.target.value] }))}
-        >
-          <option value="">-- Seleziona --</option>
-          {assignedPlayers.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-      </div>
+const PlayoffBracketBuilder: React.FC<PlayoffBracketBuilderProps> = ({
+  event, tournament, setEvents, isOrganizer
+}) => {
+  // 1. Prendi numero giocatori da impostazioni
+  const playoffPlayersCount = tournament.settings?.playoffPlayers || 16;
+
+  // 2. Calcola quali giocatori possono accedere (classifica vera da standings, qui base su order dei gruppi)
+  // Consiglio: rimpiazza con la tua vera funzione di standings/classifica.
+  // Qui mostro il migliore ordinamento base.
+  const allRankings: { playerId: string, rank: number, fromGroup: string, groupName: string }[] = useMemo(() => {
+    let standingsArr: { playerId: string, rank: number, fromGroup: string, groupName: string }[] = [];
+    tournament.groups.forEach(group => {
+      // Usa la classifica reale del girone: qui per esempio si usa l'ordine in playerIds
+      group.playerIds.forEach((pid, idx) => {
+        standingsArr.push({
+          playerId: pid,
+          rank: idx + 1,
+          fromGroup: group.id,
+          groupName: group.name
+        });
+      });
+    });
+    // Ordina tutta la classifica (sostituisci con la tua vera logica!)
+    standingsArr.sort((a, b) => a.rank - b.rank);
+    return standingsArr.slice(0, playoffPlayersCount);
+  }, [tournament, playoffPlayersCount]);
+
+  // Bracket size = prossima potenza di 2
+  const bracketSize = useMemo(() => {
+    const numPlayers = allRankings.length;
+    if (numPlayers < 2) return 0;
+    return 2 ** Math.ceil(Math.log2(numPlayers));
+  }, [allRankings]);
+    
+  const [firstRoundAssignments, setFirstRoundAssignments] = useState<(string | null)[]>([]);
+  useEffect(() => {
+    setFirstRoundAssignments(Array(bracketSize).fill(null));
+  }, [allRankings, bracketSize]);
+
+  const getPlayer = (id: string | null): Player | null => id ? event.players.find(p => p.id === id) ?? null : null;
+
+  const handleAssignmentChange = (slotIndex: number, value: string) => {
+    setFirstRoundAssignments(prev => {
+      const newAssignments = [...prev];
+      const existingIndex = newAssignments.findIndex(v => v === value);
+      if (existingIndex !== -1 && value !== 'BYE') {
+        newAssignments[existingIndex] = null;
+      }
+      newAssignments[slotIndex] = value === '' ? null : value;
+      return newAssignments;
+    });
+  };
+
+  // Funzione chiamata quando clicchi "Genera Tabellone"
+  const handleGenerateBracket = () => {
+    // Qui aggiorna il torneo con la nuova struttura! Solo esempio:
+    console.log("Genera playoff bracket", firstRoundAssignments);
+    alert("Tabellone playoff generato! Implementa salvataggio qui.");
+  };
+
+  const unassignedPlayers = allRankings.filter(q => !firstRoundAssignments.includes(q.playerId));
+  const numByesAvailable = bracketSize - allRankings.length;
+  const byesAssigned = firstRoundAssignments.filter(a => a === 'BYE').length;
+
+  const AssignmentSlot = ({ slotIndex }: { slotIndex: number }) => {
+    const currentValue = firstRoundAssignments[slotIndex];
+    const currentPlayer = getPlayer(currentValue);
+    return (
+      <select
+        value={currentValue ?? ''}
+        onChange={(e) => handleAssignmentChange(slotIndex, e.target.value)}
+        className="w-full bg-primary border border-tertiary rounded-lg p-2 text-text-primary focus:ring-2 focus:ring-accent"
+      >
+        <option value="">-- Seleziona --</option>
+        {currentValue && currentValue !== 'BYE' && <option value={currentValue}>{currentPlayer?.name}</option>}
+        {unassignedPlayers
+          .slice()
+          .sort((a, b) => {
+            const playerA = getPlayer(a.playerId);
+            const playerB = getPlayer(b.playerId);
+            return (playerA?.name || '').localeCompare(playerB?.name || '');
+          })
+          .map(q => (
+            <option key={q.playerId} value={q.playerId}>{getPlayer(q.playerId)?.name}</option>
+        ))}
+        {(byesAssigned < numByesAvailable || currentValue === 'BYE') && <option value="BYE">-- BYE --</option>}
+      </select>
     );
-  }
-
-  // Giocatori non ancora assegnati
-  const assignedIds = Object.values(assignments)
-    .flat()
-    .filter(Boolean);
-  const toAssign = assignedPlayers.filter(p => !assignedIds.includes(p.id));
+  };
 
   return (
-    <div className="flex flex-wrap gap-8">
-      {/* Tabella builder */}
-      <div className="flex-grow">
+    <div className="bg-secondary p-6 rounded-xl shadow-lg max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="lg:col-span-2">
         <h3 className="text-xl font-bold mb-2 text-accent">Costruttore Tabellone Playoff</h3>
-        <div className="text-text-secondary mb-4">Assegna manualmente i giocatori agli incontri del primo turno playoff.</div>
-        {tableRows}
-        <button
-          className="bg-highlight text-white px-4 py-2 mt-4 rounded font-bold"
-          onClick={() => onAssign(assignments)}
-        >
-          Genera Tabellone
-        </button>
-      </div>
-      {/* Riepilogo */}
-      <div className="min-w-[240px]">
-        <h4 className="text-lg font-bold mb-3">Riepilogo</h4>
-        <div className="mb-3">
-          <span className="block text-sm text-text-secondary">Qualificati: <span className="font-bold">{assignedPlayers.length}</span></span>
-          <span className="block text-sm text-text-secondary">Posti: <span className="font-bold">{matchCount * 2}</span></span>
-          <span className="block text-sm text-text-secondary">Bye: <span className="font-bold">{(matchCount * 2) - assignedPlayers.length}</span></span>
+        <p className="text-text-secondary mb-6">Assegna manualmente i giocatori qualificati agli slot del primo turno.</p>
+        <div className="space-y-4">
+          {bracketSize > 0 ? Array.from({ length: bracketSize / 2 }).map((_, index) => (
+            <div key={index} className="bg-primary/50 p-4 rounded-lg flex items-center gap-4">
+              <span className="font-bold text-text-secondary">M{index+1}</span>
+              <div className="flex-1"><AssignmentSlot slotIndex={index * 2} /></div>
+              <span className="text-tertiary">vs</span>
+              <div className="flex-1"><AssignmentSlot slotIndex={index * 2 + 1} /></div>
+            </div>
+          )) : <p className="text-text-secondary">Nessun giocatore qualificato per il tabellone playoff.</p>}
         </div>
-        <h5 className="text-sm font-bold mb-2">Giocatori da Assegnare</h5>
-        <ul>
-          {toAssign.map(p =>
-            <li key={p.id} className="mb-2 flex gap-2 items-center text-white font-semibold">
-              <span className="bg-tertiary px-2 py-1 rounded-full">{p.name}</span>
-              <span className="text-text-secondary text-xs">{p.id}</span>
-            </li>
-          )}
-        </ul>
+        <div className="mt-8">
+          <button onClick={handleGenerateBracket} disabled={firstRoundAssignments.some(a => a === null) || allRankings.length < 2} className="w-full bg-highlight hover:bg-highlight/90 text-white font-bold py-3 rounded-lg transition-colors">
+            Genera Tabellone
+          </button>
+        </div>
+      </div>
+      <div className="sticky top-4">
+        <h4 className="font-semibold text-xl mb-4 text-accent">Riepilogo</h4>
+        <div className="bg-primary/50 p-4 rounded-lg mb-6">
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div><div className="text-2xl font-bold">{allRankings.length}</div><div className="text-sm text-text-secondary">Qualificati</div></div>
+            <div><div className="text-2xl font-bold">{bracketSize}</div><div className="text-sm text-text-secondary">Posti</div></div>
+            <div><div className="text-2xl font-bold">{numByesAvailable}</div><div className="text-sm text-text-secondary">Bye</div></div>
+          </div>
+        </div>
+        <h4 className="font-semibold text-lg mb-3">Giocatori da Assegnare</h4>
+        <div className="space-y-2">
+          {unassignedPlayers.length > 0 ? unassignedPlayers
+            .slice()
+            .sort((a, b) => {
+              const playerA = getPlayer(a.playerId);
+              const playerB = getPlayer(b.playerId);
+              return (playerA?.name || '').localeCompare(playerB?.name || '');
+            })
+            .map(q => {
+              const player = getPlayer(q.playerId);
+              return (
+                <div key={q.playerId} className="bg-tertiary/50 p-2 rounded-lg flex items-center gap-3">
+                  {/* avatar */}
+                  <img src={player?.avatar} alt={player?.name} className="w-8 h-8 rounded-full" />
+                  <div>
+                    <div className="font-semibold text-sm">{player?.name}</div>
+                    <div className="text-xs text-text-secondary">{q.rank}° class. {q.groupName}</div>
+                  </div>
+                </div>
+              );
+            })
+            : <p className="text-text-secondary text-sm italic">Tutti i giocatori sono stati assegnati.</p>
+          }
+        </div>
       </div>
     </div>
   );
