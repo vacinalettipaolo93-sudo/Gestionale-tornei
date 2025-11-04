@@ -6,26 +6,7 @@ import ParticipantsTab from './ParticipantsTab';
 import GroupManagement from './GroupManagement';
 import TournamentSettings from './TournamentSettings';
 import Playoffs from './Playoffs';
-import ConsolationBracket from './ConsolationBracket';
-import PlayerManagement from './PlayerManagement';
-import { db } from "../firebase";
-import { updateDoc, doc } from "firebase/firestore";
 
-interface TournamentViewProps {
-  event: Event;
-  tournament: Tournament;
-  setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
-  isOrganizer: boolean;
-  loggedInPlayerId?: string;
-  selectedGroupId?: string;
-}
-
-const TournamentView: React.FC<TournamentViewProps> = ({
-  event, tournament, setEvents, isOrganizer, loggedInPlayerId
-}) => {
-  const userGroup = tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId ?? ""));
-  const [selectedGroupId, setSelectedGroupId] = useState(
-    userGroup ? userGroup.id : tournament.groups[0]?.id
   );
   const selectedGroup = tournament.groups.find(g => g.id === selectedGroupId);
 
