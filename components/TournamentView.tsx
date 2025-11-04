@@ -79,7 +79,6 @@ const PlayoffBracketBuilder: React.FC<{
           {toAssign.map(p =>
             <li key={p.id} className="mb-2 flex gap-2 items-center text-white font-semibold">
               <span className="bg-tertiary px-2 py-1 rounded-full">{p.name}</span>
-              <span className="text-text-secondary text-xs">{p.id}</span>
             </li>
           )}
         </ul>
@@ -363,14 +362,18 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     // Se hai modal/variabile tipo setCancellingMatch(null), aggiungila qui!
   }
 
-  // Esempio: prendi i "qualificati" per i playoff (metti qui la tua logica vera!)
-  // Sostituisci con la tua funzione di estrazione qualificati playoff.
-  const playoffQualifiedPlayers: Player[] = event.players; // <-- Sostituisci con la tua logica!
+  // --- PLAYOFF: solo giocatori assegnati a questo torneo ---
+  const tournamentPlayerIds = tournament.groups.reduce<string[]>(
+    (ids, group) => ids.concat(group.playerIds),
+    []
+  );
+  const uniqueTournamentPlayerIds = Array.from(new Set(tournamentPlayerIds));
+  const playoffQualifiedPlayers: Player[] = event.players.filter(p => uniqueTournamentPlayerIds.includes(p.id));
 
   // Numero match primo turno playoff (adatta secondo le impostazioni torneo/playoff)
   const playoffMatchesCount = 8;
 
-  // Funzione per gestire la generazione su assegnamento manuale
+  // Funzione per gestire la generazione su assegnamento manuale (adatta secondo i tuoi dati reali)
   function handleAssignPlayoffBracket(assignments: { [matchId: string]: [string | null, string | null] }) {
     // Qui la tua logica per salvare il tabellone costruito!
     // Esempio console:
