@@ -1,100 +1,10 @@
-import React, { useState } from "react";
-import { type Event, type Tournament } from "../types";
-import { updateDoc, doc } from "firebase/firestore";
+import React, { useState, useEffect } from 'react';
+import { type Event, type Tournament } from '../types';
+import RegolamentoGironiPanel from './RegolamentoGironiPanel';
+import TimeSlots from './TimeSlots';
 import { db } from "../firebase";
-import TimeSlots from "./TimeSlots";
-
-// --------- AGGIUNTA COMPONENTE RegolamentoGironiPanel ----------
-const RegolamentoGironiPanel: React.FC<{
-  event: Event;
-  tournament: Tournament;
-  setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
-}> = ({ event, tournament, setEvents }) => {
-  const [selectedGroupId, setSelectedGroupId] = useState(tournament.groups[0]?.id ?? "");
-  const selectedGroup = tournament.groups.find((g) => g.id === selectedGroupId);
-  const [rulesText, setRulesText] = useState<string>(selectedGroup?.rules ?? "");
-  const [loading, setLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
-
-  React.useEffect(() => {
-    setRulesText(selectedGroup?.rules ?? "");
-    setSuccessMsg("");
-  }, [selectedGroupId, tournament.groups]);
-
-  const handleChangeGroup = (groupId: string) => {
-    setSelectedGroupId(groupId);
-    const group = tournament.groups.find((g) => g.id === groupId);
-    setRulesText(group?.rules ?? "");
-  };
-
-  const handleSaveRules = async () => {
-    if (!selectedGroup) return;
-
-    setLoading(true);
-    setSuccessMsg("");
-    const updatedGroups = tournament.groups.map((g) =>
-      g.id === selectedGroup.id ? { ...g, rules: rulesText } : g
-    );
-
-    setEvents((prevEvents) =>
-      prevEvents.map((e) => {
-        if (e.id !== event.id) return e;
-        return {
-          ...e,
-          tournaments: e.tournaments.map((t) =>
-            t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-          ),
-        };
-      })
-    );
-
-    await updateDoc(doc(db, "events", event.id), {
-      tournaments: event.tournaments.map((t) =>
-        t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-      ),
-    });
-
-    setLoading(false);
-    setSuccessMsg("Regolamento salvato per il girone!");
-  };
-
-  if (!selectedGroup) return null;
-  return (
-    <div className="mb-8 bg-secondary p-6 rounded-xl shadow-md">
-      <h3 className="text-xl mb-4 font-bold text-accent">Regolamento di ogni Girone</h3>
-      <div className="flex items-center gap-4 mb-4">
-        <label className="font-semibold">Scegli Girone:</label>
-        <select
-          value={selectedGroupId}
-          onChange={(e) => handleChangeGroup(e.target.value)}
-          className="bg-tertiary rounded px-3 py-2 font-bold"
-        >
-          {tournament.groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <textarea
-        value={rulesText}
-        onChange={(e) => setRulesText(e.target.value)}
-        className="w-full rounded bg-primary border p-3 min-h-[120px] mb-3"
-        placeholder="Scrivi qui il regolamento per il girone selezionato..."
-        disabled={loading}
-      />
-      <button
-        onClick={handleSaveRules}
-        disabled={loading}
-        className="bg-highlight text-white px-4 py-2 rounded font-bold"
-      >
-        {loading ? "Salvando..." : "Salva regolamento per girone"}
-      </button>
-      {successMsg && <div className="text-green-600 mt-3 font-semibold">{successMsg}</div>}
-    </div>
-  );
-};
-// -------------------------------------------------------------------------
+import { updateDoc, doc } from "firebase/firestore";
+import { TrashIcon, PlusIcon } from './Icons';
 
 interface EventViewProps {
   event: Event;
@@ -103,6 +13,8 @@ interface EventViewProps {
   isOrganizer: boolean;
   loggedInPlayerId?: string;
 }
+
+const makeId = () => `${Date.now()}${Math.floor(Math.random() * 10000)}`;
 
 const EventView: React.FC<EventViewProps> = ({
   event,
@@ -113,54 +25,170 @@ const EventView: React.FC<EventViewProps> = ({
 }) => {
   const [rulesDraft, setRulesDraft] = useState(event.rules ?? "");
   const [rulesEdit, setRulesEdit] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [successMsg, setSuccessMsg] = useState("");
+
+  // --- NEW: state per "Aggiungi Torneo" modal (attiva il bottone esistente) ---
+  const [isAddTournamentOpen, setIsAddTournamentOpen] = useState(false);
+  const [newTournamentName, setNewTournamentName] = useState("");
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRulesDraft(event.rules ?? "");
+  }, [event]);
 
   const handleSaveRules = async () => {
-    setEvents(prev =>
-      prev.map(ev => ev.id === event.id ? { ...ev, rules: rulesDraft } : ev)
-    );
-    await updateDoc(doc(db, "events", event.id), { rules: rulesDraft });
-    setRulesEdit(false);
+    setLoading(true);
+    try {
+      setEvents(prev =>
+        prev.map(ev =>
+          ev.id === event.id ? { ...ev, rules: rulesDraft } : ev
+        )
+      );
+      await updateDoc(doc(db, "events", event.id), {
+        rules: rulesDraft
+      });
+      setSuccessMsg("Regolamento salvato!");
+      setRulesEdit(false);
+      setTimeout(() => setSuccessMsg(""), 2500);
+    } catch (err) {
+      console.error("Errore salvataggio regolamento", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeleteRules = async () => {
-    setEvents(prev =>
-      prev.map(ev => ev.id === event.id ? { ...ev, rules: "" } : ev)
-    );
-    await updateDoc(doc(db, "events", event.id), { rules: "" });
-    setRulesDraft("");
-    setRulesEdit(false);
+  // ----------------- NEW: Add Tournament handlers -----------------
+  const openAddTournament = () => {
+    setAddError(null);
+    setNewTournamentName("");
+    setIsAddTournamentOpen(true);
+  };
+
+  const cancelAddTournament = () => {
+    setIsAddTournamentOpen(false);
+    setNewTournamentName("");
+    setAddError(null);
+  };
+
+  const handleAddTournament = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setAddError(null);
+    if (!newTournamentName.trim()) {
+      setAddError("Inserisci il nome del torneo.");
+      return;
+    }
+
+    setAddLoading(true);
+    try {
+      const newTournament: Tournament = {
+        id: makeId(),
+        name: newTournamentName.trim(),
+        groups: [],
+        matches: [],
+        settings: {
+          pointsPerDraw: 1,
+          pointRules: [],
+          tieBreakers: ["goalDifference"],
+          playoffSettings: [],
+          consolationSettings: [],
+          hasBronzeFinal: false
+        } as any,
+      } as any;
+
+      // Aggiorna lo stato locale subito (propagazione al parent)
+      setEvents(prevEvents =>
+        prevEvents.map(ev =>
+          ev.id === event.id
+            ? { ...ev, tournaments: [...(ev.tournaments ?? []), newTournament] }
+            : ev
+        )
+      );
+
+      // Salva su Firestore
+      await updateDoc(doc(db, "events", event.id), {
+        tournaments: (event.tournaments ?? []).concat(newTournament)
+      });
+
+      // chiudi modal e reset
+      setIsAddTournamentOpen(false);
+      setNewTournamentName("");
+    } catch (err: any) {
+      console.error("Errore creazione torneo", err);
+      setAddError(err?.message || "Errore durante la creazione del torneo");
+    } finally {
+      setAddLoading(false);
+    }
+  };
+  // ----------------- END Add Tournament handlers -----------------
+
+  const handleDeleteTournament = async (tournamentId: string) => {
+    if (!confirm("Sei sicuro di voler eliminare questo torneo?")) return;
+    try {
+      const updatedTournaments = (event.tournaments ?? []).filter(t => t.id !== tournamentId);
+      setEvents(prevEvents =>
+        prevEvents.map(ev =>
+          ev.id === event.id ? { ...ev, tournaments: updatedTournaments } : ev
+        )
+      );
+      await updateDoc(doc(db, "events", event.id), {
+        tournaments: updatedTournaments
+      });
+    } catch (err) {
+      console.error("Errore eliminazione torneo", err);
+    }
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-      {/* HEADER EVENTO */}
-      <div className="flex flex-wrap items-center justify-between mb-4 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-white">{event.name}</h1>
-          <div className="flex items-center gap-4 mt-2">
-            <span className="bg-primary px-3 py-1 rounded-lg text-sm text-text-secondary">
+    <div>
+      <div className="bg-primary p-6 rounded-xl shadow-lg mb-8">
+        <div className="flex justify-between items-start gap-6">
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold text-white mb-1">{event.name}</h1>
+            <div className="text-sm text-text-secondary">
               Codice Invito: <span className="font-bold text-accent">{event.invitationCode}</span>
-            </span>
+            </div>
           </div>
+
+          {isOrganizer && (
+            <div className="flex items-center gap-3">
+              {/* FIX: button now has type and onClick to open modal */}
+              <button
+                type="button"
+                onClick={openAddTournament}
+                className="bg-accent px-5 py-2 rounded-lg text-white font-bold hover:bg-accent/80 shadow transition-all flex items-center gap-2"
+              >
+                <PlusIcon className="w-4 h-4" />
+                + Aggiungi Torneo
+              </button>
+            </div>
+          )}
         </div>
-        {isOrganizer && (
-          <button className="bg-accent px-5 py-2 rounded-lg text-white font-bold hover:bg-accent/80 shadow transition-all">
-            + Aggiungi Torneo
-          </button>
-        )}
       </div>
 
       {/* CARD TORNEI */}
       <div>
         <h2 className="text-2xl font-bold text-white mb-4">Tornei</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {event.tournaments.map(tournament => (
+          {(event.tournaments ?? []).map(tournament => (
             <div key={tournament.id} className="bg-secondary rounded-xl shadow-lg p-4 flex flex-col justify-between">
               <div>
-                <h3 className="text-xl font-bold text-accent mb-2">{tournament.name}</h3>
+                <div className="flex justify-between items-start">
+                  <h3 className="text-xl font-bold text-accent mb-2">{tournament.name}</h3>
+                  {isOrganizer && (
+                    <button
+                      onClick={() => handleDeleteTournament(tournament.id)}
+                      className="text-text-secondary/60 hover:text-red-500 p-1 rounded"
+                      title="Elimina torneo"
+                    >
+                      <TrashIcon className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-3 mb-2">
                   <span className="text-sm text-text-secondary">
-                    {tournament.groups.length} gironi
+                    {tournament.groups?.length ?? 0} gironi
                   </span>
                 </div>
                 <div className="text-sm text-text-secondary mb-2">
@@ -221,31 +249,20 @@ const EventView: React.FC<EventViewProps> = ({
             <div>
               <textarea
                 value={rulesDraft}
-                onChange={e => setRulesDraft(e.target.value)}
-                rows={6}
-                className="w-full p-2 bg-primary border border-tertiary rounded-lg text-text-primary"
-                placeholder="Scrivi qui le regole del torneo..."
+                onChange={(e) => setRulesDraft(e.target.value)}
+                className="w-full rounded bg-primary border p-3 min-h-[120px] mb-3"
+                placeholder="Scrivi qui il regolamento per il girone selezionato..."
+                disabled={loading}
               />
-              <div className="flex gap-3 justify-end mt-2">
-                <button
-                  onClick={handleSaveRules}
-                  className="py-1 px-4 bg-accent text-white rounded-lg font-semibold"
-                >
-                  Salva
+              <div className="flex items-center gap-3">
+                <button onClick={handleSaveRules} disabled={loading} className="bg-highlight text-white px-4 py-2 rounded font-bold">
+                  {loading ? "Salvando..." : "Salva regolamento per girone"}
                 </button>
-                <button
-                  onClick={() => setRulesEdit(false)}
-                  className="py-1 px-4 bg-tertiary text-text-primary rounded-lg font-semibold"
-                >
+                <button onClick={() => { setRulesEdit(false); setRulesDraft(event.rules ?? ""); }} className="bg-tertiary px-4 py-2 rounded">
                   Annulla
                 </button>
-                <button
-                  onClick={handleDeleteRules}
-                  className="py-1 px-4 bg-red-600 text-white rounded-lg font-semibold"
-                >
-                  Cancella
-                </button>
               </div>
+              {successMsg && <div className="text-green-600 mt-3 font-semibold">{successMsg}</div>}
             </div>
           ) : (
             <div className="bg-primary p-4 rounded-lg border border-tertiary mt-2 whitespace-pre-line">
@@ -256,8 +273,8 @@ const EventView: React.FC<EventViewProps> = ({
       )}
 
       {/* REGOLAMENTO PER OGNI GIRONE - SOLO ORGANIZZATORE */}
-      {isOrganizer && event.tournaments.length > 0 &&
-        event.tournaments.map(tournament => (
+      {isOrganizer && (event.tournaments ?? []).length > 0 &&
+        (event.tournaments ?? []).map(tournament => (
           <RegolamentoGironiPanel
             key={tournament.id}
             event={event}
@@ -266,6 +283,37 @@ const EventView: React.FC<EventViewProps> = ({
           />
         ))
       }
+
+      {/* ----------------- MODAL: AGGIUNGI TORNEO ----------------- */}
+      {isAddTournamentOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4 text-accent">Aggiungi Nuovo Torneo</h4>
+            <form onSubmit={handleAddTournament} className="space-y-4">
+              <div>
+                <label className="block text-sm mb-1">Nome Torneo</label>
+                <input
+                  autoFocus
+                  value={newTournamentName}
+                  onChange={e => setNewTournamentName(e.target.value)}
+                  className="w-full bg-primary border border-tertiary rounded-lg p-2"
+                  placeholder="Esempio: Torneo Primavera"
+                />
+              </div>
+
+              {addError && <div className="text-red-400">{addError}</div>}
+
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={cancelAddTournament} className="bg-tertiary px-4 py-2 rounded">Annulla</button>
+                <button type="submit" disabled={addLoading} className="bg-highlight text-white px-4 py-2 rounded font-bold">
+                  {addLoading ? 'Creazione...' : 'Crea Torneo'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ----------------- /MODAL ----------------- */}
     </div>
   );
 };
