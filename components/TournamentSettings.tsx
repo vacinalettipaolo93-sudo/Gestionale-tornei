@@ -1,3 +1,4 @@
+/* TournamentSettings.tsx - versione aggiornata: merge settings con default per garantire tieBreakers disponibili */
 import React, { useState, useEffect } from 'react';
 import { type Event, type Tournament, type TournamentSettings, type PointRule, type TieBreaker, PlayoffSetting, ConsolationSetting } from '../types';
 import { TrashIcon, PlusIcon, ArrowUpIcon, ArrowDownIcon } from './Icons';
@@ -17,14 +18,25 @@ const tieBreakerLabels: Record<TieBreaker, string> = {
     headToHead: 'Scontro Diretto',
 };
 
+// default settings values (keeps consistent criteria for each new/edited tournament)
+const DEFAULT_SETTINGS: TournamentSettings = {
+    pointsPerDraw: 1,
+    pointRules: [],
+    tieBreakers: ['wins', 'goalDifference', 'headToHead', 'goalsFor'],
+    playoffSettings: [],
+    consolationSettings: [],
+    hasBronzeFinal: false
+} as any;
+
 const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tournament, setEvents }) => {
-    const [settings, setSettings] = useState<TournamentSettings>(tournament.settings);
+    // merge incoming tournament.settings with defaults to ensure all fields exist
+    const [settings, setSettings] = useState<TournamentSettings>({ ...DEFAULT_SETTINGS, ...(tournament.settings || {}) });
     const [saved, setSaved] = useState(false);
 
     useEffect(() => {
-        setSettings(tournament.settings);
+        setSettings({ ...DEFAULT_SETTINGS, ...(tournament.settings || {}) });
     }, [tournament]);
-    
+
     const handleRuleChange = (ruleId: string, field: keyof PointRule, value: string) => {
         const numericValue = parseInt(value, 10) || 0;
         setSettings(prev => ({
@@ -68,7 +80,7 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
         setSettings(prev => ({...prev, tieBreakers: newTieBreakers}));
     };
 
-    // PATCH: safe access to groups and playerIds
+    // safe access to groups and playerIds
     const handlePlayoffSettingChange = (groupId: string, value: string) => {
         const num = parseInt(value, 10) || 0;
         const groupPlayerCount = Array.isArray(tournament.groups)
@@ -88,7 +100,6 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
         });
     };
 
-    // PATCH: safe access to groups and playerIds
     const handleConsolationSettingChange = (groupId: string, field: 'startRank' | 'endRank', value: string) => {
         const num = parseInt(value, 10) || 0;
         
@@ -147,13 +158,13 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
                                 </div>
                                  <div className="col-span-1 sm:col-span-2 flex items-center gap-2">
                                     <span className="text-sm">Punti:</span>
-                                    <input type="number" value={rule.winnerPoints} onChange={e => handleRuleChange(rule.id, 'winnerPoints', e.target.value)} className={inputClasses} title="Punti Vincitore"/>
-                                    <span>(V)</span>
+                                    <input type="number" value={rule.winnerPoints} onChange={e => handleRuleChange(rule.id, 'winnerPoints', e.target.value)} className={inputClasses} title="Punti Vinci"/>
+                                     <span>(V)</span>
                                      <input type="number" value={rule.loserPoints} onChange={e => handleRuleChange(rule.id, 'loserPoints', e.target.value)} className={inputClasses} title="Punti Sconfitto"/>
                                     <span>(S)</span>
                                 </div>
                                 <div className="col-span-1 flex justify-end">
-                                    <button type="button" onClick={() => handleRemoveRule(rule.id)} className="text-text-secondary/50 hover:text-red-500 transition-colors p-2"><TrashIcon className="w-5 h-5"/></button>
+                                    <button type="button" onClick={() => handleRemoveRule(rule.id)} className="text-text-secondary/50 hover:text-red-500 transition-colors p-2"><TrashIcon className="w-5 h-5" /></button>
                                 </div>
                             </div>
                         ))}
@@ -181,12 +192,12 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
                 <div>
                      <h4 className="text-lg font-semibold mb-3 text-text-primary">Criteri Ordine Classifica (in caso di parità)</h4>
                      <div className="space-y-2 bg-primary/50 p-4 rounded-lg max-w-sm">
-                        {settings.tieBreakers.map((tb, index) => (
+                        {(settings.tieBreakers || []).map((tb, index) => (
                             <div key={tb} className="flex items-center justify-between bg-tertiary/50 p-2 rounded-lg">
                                 <span className="font-medium">{index+1}. {tieBreakerLabels[tb]}</span>
                                 <div className="flex items-center">
-                                    <button type="button" onClick={() => handleMoveTieBreaker(index, 'up')} disabled={index === 0} className="p-1 disabled:opacity-30 text-text-secondary hover:text-text-primary"><ArrowUpIcon className="w-5 h-5"/></button>
-                                    <button type="button" onClick={() => handleMoveTieBreaker(index, 'down')} disabled={index === settings.tieBreakers.length - 1} className="p-1 disabled:opacity-30 text-text-secondary hover:text-text-primary"><ArrowDownIcon className="w-5 h-5"/></button>
+                                    <button type="button" onClick={() => handleMoveTieBreaker(index, 'up')} disabled={index === 0} className="p-1 disabled:opacity-30 text-text-secondary hover:text-text-primary"><ArrowUpIcon className="w-4 h-4" /></button>
+                                    <button type="button" onClick={() => handleMoveTieBreaker(index, 'down')} disabled={index === (settings.tieBreakers || []).length - 1} className="p-1 disabled:opacity-30 text-text-secondary hover:text-text-primary"><ArrowDownIcon className="w-4 h-4" /></button>
                                 </div>
                             </div>
                         ))}
