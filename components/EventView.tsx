@@ -1,3 +1,4 @@
+/* EventView.tsx - versione aggiornata: assicura settings di default completi quando si crea un nuovo torneo */
 import React, { useState, useEffect } from 'react';
 import { type Event, type Tournament } from '../types';
 import RegolamentoGironiPanel from './RegolamentoGironiPanel';
@@ -28,7 +29,7 @@ const EventView: React.FC<EventViewProps> = ({
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
 
-  // --- NEW: state per "Aggiungi Torneo" modal (attiva il bottone esistente) ---
+  // state per "Aggiungi Torneo"
   const [isAddTournamentOpen, setIsAddTournamentOpen] = useState(false);
   const [newTournamentName, setNewTournamentName] = useState("");
   const [addLoading, setAddLoading] = useState(false);
@@ -59,7 +60,17 @@ const EventView: React.FC<EventViewProps> = ({
     }
   };
 
-  // ----------------- NEW: Add Tournament handlers -----------------
+  // default settings object (complete) – mantiene sempre gli stessi criteri disponibili
+  const defaultTournamentSettings = {
+    pointsPerDraw: 1,
+    pointRules: [],
+    // ordine di tieBreakers di default (puoi adattare l'ordine se preferisci)
+    tieBreakers: ['wins', 'goalDifference', 'headToHead', 'goalsFor'],
+    playoffSettings: [],
+    consolationSettings: [],
+    hasBronzeFinal: false,
+  };
+
   const openAddTournament = () => {
     setAddError(null);
     setNewTournamentName("");
@@ -87,17 +98,10 @@ const EventView: React.FC<EventViewProps> = ({
         name: newTournamentName.trim(),
         groups: [],
         matches: [],
-        settings: {
-          pointsPerDraw: 1,
-          pointRules: [],
-          tieBreakers: ["goalDifference"],
-          playoffSettings: [],
-          consolationSettings: [],
-          hasBronzeFinal: false
-        } as any,
+        settings: { ...defaultTournamentSettings } as any,
       } as any;
 
-      // Aggiorna lo stato locale subito (propagazione al parent)
+      // Aggiorna lo stato locale subito
       setEvents(prevEvents =>
         prevEvents.map(ev =>
           ev.id === event.id
@@ -121,7 +125,6 @@ const EventView: React.FC<EventViewProps> = ({
       setAddLoading(false);
     }
   };
-  // ----------------- END Add Tournament handlers -----------------
 
   const handleDeleteTournament = async (tournamentId: string) => {
     if (!confirm("Sei sicuro di voler eliminare questo torneo?")) return;
@@ -153,7 +156,6 @@ const EventView: React.FC<EventViewProps> = ({
 
           {isOrganizer && (
             <div className="flex items-center gap-3">
-              {/* FIX: button now has type and onClick to open modal */}
               <button
                 type="button"
                 onClick={openAddTournament}
@@ -284,7 +286,7 @@ const EventView: React.FC<EventViewProps> = ({
         ))
       }
 
-      {/* ----------------- MODAL: AGGIUNGI TORNEO ----------------- */}
+      {/* MODAL: AGGIUNGI TORNEO */}
       {isAddTournamentOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
@@ -313,7 +315,6 @@ const EventView: React.FC<EventViewProps> = ({
           </div>
         </div>
       )}
-      {/* ----------------- /MODAL ----------------- */}
     </div>
   );
 };
