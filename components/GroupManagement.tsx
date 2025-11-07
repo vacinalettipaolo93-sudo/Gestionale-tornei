@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { type Event, type Tournament, type Group, type Player, type Match } from '../types';
 import { TrashIcon } from './Icons';
 import { db } from "../firebase";
@@ -32,9 +32,18 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // SEARCH for assign modal (added) - keep empty by default
+    const [assignSearchQuery, setAssignSearchQuery] = useState('');
+
     const openAssignModal = (group: Group) => {
         setAssigningGroup(group);
         setSelectedPlayers(new Set(group.playerIds));
+        setAssignSearchQuery('');
+        // small delay to ensure modal is in DOM before attempting to focus
+        setTimeout(() => {
+          const el = document.getElementById('assignSearchInput') as HTMLInputElement | null;
+          el?.focus();
+        }, 50);
     };
 
     const handlePlayerSelection = (playerId: string) => {
@@ -296,6 +305,18 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
 
     const getPlayer = (id: string) => event.players.find(p => p.id === id);
 
+    // Filtered + sorted players for assign modal: alphabetical and searchable
+    const filteredAssignPlayers = useMemo(() => {
+        const q = assignSearchQuery.trim().toLowerCase();
+        return (event.players ?? [])
+            .slice()
+            .filter(p => {
+                if (!q) return true;
+                return (p.name ?? '').toLowerCase().includes(q) || (p.email ?? '').toLowerCase().includes(q);
+            })
+            .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+    }, [event.players, assignSearchQuery]);
+
     return (
         <div className="space-y-6">
             {/* Header amministrazione gironi */}
@@ -353,7 +374,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                                                 <img src={player.avatar} alt={player.name} className="w-8 h-8 rounded-full flex-shrink-0 object-cover" />
                                                 <span className="text-sm font-medium truncate">{player.name}</span>
                                             </div>
-                                            <button onClick={() => setPlayerToRemove({player, group})} className="opacity-0 group-hover/player:opacity-100 text-text-secondary/50 hover:text-red-500 transition-colors">
+                                            <button onClick={() => setPlayerToRemove({player, group})} className="opacity-0 group-hover/player:opacity-100 text-text-secondary/50 hover:text-red-500 transition-colors p-1">
                                                 <TrashIcon className="w-4 h-4" />
                                             </button>
                                         </li>
@@ -387,8 +408,21 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                         <h4 className="text-lg font-bold mb-4">
                             Assegna Giocatori a {assigningGroup.name}
                         </h4>
+
+                        {/* SEARCH INPUT: only change in modal */}
+                        <div className="mb-3">
+                          <input
+                            id="assignSearchInput"
+                            type="text"
+                            value={assignSearchQuery}
+                            onChange={e => setAssignSearchQuery(e.target.value)}
+                            placeholder="Cerca giocatore..."
+                            className="w-full bg-primary border border-tertiary rounded px-3 py-2"
+                          />
+                        </div>
+
                         <ul className="mb-4 space-y-2 max-h-80 overflow-auto">
-                            {event.players.map(player => (
+                            {filteredAssignPlayers.map(player => (
                                 <li key={player.id} className="flex items-center gap-3">
                                     <input
                                         type="checkbox"
@@ -421,7 +455,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                             autoFocus
                         />
                         <label className="text-sm text-text-secondary">Numero attuale di giocatori: {editingGroup.playerIds.length}</label>
-                        <p className="text-sm text-text-secondary mb-2">Per modificare i giocatori usa "Assegna Giocatori". Ridurre il numero rimuoverà i giocatori oltre la dimensione scelta e le loro partite.</p>
+                        <p className="text-sm text-text-secondary mb-2">Per modificare i giocatori usa "Assegna Giocatori". Ridurre il numero rimuoverà i giocatori oltre la dimensione scelta e le lor...</p>
                         <div className="mb-2">
                             <label className="text-sm text-text-secondary">Regolamento del girone</label>
                             <textarea
