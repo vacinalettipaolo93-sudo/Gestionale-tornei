@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { type Event, type Player } from '../types';
-import { TrashIcon, PlusIcon, PencilIcon, SwapIcon, PhoneIcon } from './Icons';
+import { TrashIcon, PlusIcon } from './Icons';
 import { db } from "../firebase";
 import { updateDoc, doc } from "firebase/firestore";
 
@@ -12,6 +12,30 @@ interface PlayerManagementProps {
 }
 
 const makeId = () => `${Date.now()}${Math.floor(Math.random() * 10000)}`;
+
+/**
+ * Inline fallback icons (simple SVG) to avoid build errors if Icons.tsx
+ * doesn't export some icons. These are local-only and don't change UI behavior.
+ */
+const PencilIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+    <path d="M3 21v-3.75L17.81 2.44a1 1 0 0 1 1.41 0l1.34 1.34a1 1 0 0 1 0 1.41L6.75 20.0H3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M14.5 3.5l6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+const SwapIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+    <path d="M3 7h13l-3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M21 17H8l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+const PhoneIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.86 19.86 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12 1.1.38 2.18.77 3.18a2 2 0 0 1-.45 2.11L8.7 11.7a16 16 0 0 0 6 6l2.7-2.7a2 2 0 0 1 2.11-.45c1 .39 2.08.65 3.18.77A2 2 0 0 1 22 16.92z" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
 
 const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, isOrganizer, onPlayerContact }) => {
   const [players, setPlayers] = useState<Player[]>(event.players ?? []);
@@ -216,7 +240,7 @@ const PlayerManagement: React.FC<PlayerManagementProps> = ({ event, setEvents, i
                 title="Contatta"
                 className="bg-accent hover:bg-accent/90 text-white px-3 py-1 rounded"
               >
-                <PhoneIcon className="w-4 h-4 inline-block mr-2" />Contatta
+                <PhoneIcon className="w-3 h-3 inline-block mr-2" />Contatta
               </button>
             </div>
           </div>
