@@ -442,6 +442,22 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                 </div>
             )}
 
+            {/* Modal: Confirm remove assigned player */}
+            {playerToRemove && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
+                    <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+                        <h4 className="text-lg font-bold mb-4">Rimuovi Giocatore dal Girone</h4>
+                        <p className="text-text-secondary mb-4">
+                            Sei sicuro di voler rimuovere <strong>{playerToRemove.player.name}</strong> dal girone <strong>{playerToRemove.group.name}</strong>? Questa operazione rimuoverà anche le sue partite nel girone.
+                        </p>
+                        <div className="flex justify-end gap-4">
+                            <button onClick={() => setPlayerToRemove(null)} className="bg-tertiary px-4 py-2 rounded">Annulla</button>
+                            <button onClick={handleRemovePlayer} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">Rimuovi Giocatore</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Modal: Modifica girone! Qui puoi MODIFICARE il regolamento */}
             {isEditOpen && editingGroup && (
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
