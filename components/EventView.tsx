@@ -1,4 +1,3 @@
-/* EventView.tsx - versione aggiornata: assicura settings di default completi quando si crea un nuovo torneo */
 import React, { useState, useEffect } from 'react';
 import { type Event, type Tournament } from '../types';
 import RegolamentoGironiPanel from './RegolamentoGironiPanel';
@@ -29,11 +28,16 @@ const EventView: React.FC<EventViewProps> = ({
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
 
-  // state per "Aggiungi Torneo"
+  // --- NEW: state per "Aggiungi Torneo" modal ---
   const [isAddTournamentOpen, setIsAddTournamentOpen] = useState(false);
   const [newTournamentName, setNewTournamentName] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  // --- NEW: state per "Modifica Torneo" (edit) ---
+  const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
+  const [editTournamentName, setEditTournamentName] = useState<string>('');
+  const [editTournamentLoading, setEditTournamentLoading] = useState<boolean>(false);
 
   useEffect(() => {
     setRulesDraft(event.rules ?? "");
@@ -60,11 +64,10 @@ const EventView: React.FC<EventViewProps> = ({
     }
   };
 
-  // default settings object (complete) – mantiene sempre gli stessi criteri disponibili
+  // default settings used when creating new tournament (kept minimal)
   const defaultTournamentSettings = {
     pointsPerDraw: 1,
     pointRules: [],
-    // ordine di tieBreakers di default (puoi adattare l'ordine se preferisci)
     tieBreakers: ['wins', 'goalDifference', 'headToHead', 'goalsFor'],
     playoffSettings: [],
     consolationSettings: [],
@@ -101,7 +104,7 @@ const EventView: React.FC<EventViewProps> = ({
         settings: { ...defaultTournamentSettings } as any,
       } as any;
 
-      // Aggiorna lo stato locale subito
+      // update local state immediately
       setEvents(prevEvents =>
         prevEvents.map(ev =>
           ev.id === event.id
@@ -110,12 +113,11 @@ const EventView: React.FC<EventViewProps> = ({
         )
       );
 
-      // Salva su Firestore
+      // save to Firestore
       await updateDoc(doc(db, "events", event.id), {
         tournaments: (event.tournaments ?? []).concat(newTournament)
       });
 
-      // chiudi modal e reset
       setIsAddTournamentOpen(false);
       setNewTournamentName("");
     } catch (err: any) {
@@ -127,6 +129,7 @@ const EventView: React.FC<EventViewProps> = ({
   };
 
   const handleDeleteTournament = async (tournamentId: string) => {
+    // opzionale: conferma prima di eliminare
     if (!confirm("Sei sicuro di voler eliminare questo torneo?")) return;
     try {
       const updatedTournaments = (event.tournaments ?? []).filter(t => t.id !== tournamentId);
@@ -140,6 +143,44 @@ const EventView: React.FC<EventViewProps> = ({
       });
     } catch (err) {
       console.error("Errore eliminazione torneo", err);
+    }
+  };
+
+  // --- NEW: edit tournament handlers ---
+  const openEditTournament = (t: Tournament) => {
+    setEditingTournament(t);
+    setEditTournamentName(t.name);
+  };
+
+  const closeEditTournamentModal = () => {
+    setEditingTournament(null);
+    setEditTournamentName('');
+    setEditTournamentLoading(false);
+  };
+
+  const handleSaveEditTournament = async () => {
+    if (!editingTournament) return;
+    setEditTournamentLoading(true);
+    try {
+      const updatedTournaments = (event.tournaments ?? []).map(t =>
+        t.id === editingTournament.id ? { ...t, name: editTournamentName.trim() } : t
+      );
+
+      // update local state
+      setEvents(prevEvents =>
+        prevEvents.map(ev => ev.id === event.id ? { ...ev, tournaments: updatedTournaments } : ev)
+      );
+
+      // persist on Firestore
+      await updateDoc(doc(db, "events", event.id), {
+        tournaments: updatedTournaments
+      });
+
+      closeEditTournamentModal();
+    } catch (err) {
+      console.error('Errore salvataggio nome torneo', err);
+      setEditTournamentLoading(false);
+      alert('Errore durante il salvataggio del torneo.');
     }
   };
 
@@ -179,13 +220,22 @@ const EventView: React.FC<EventViewProps> = ({
                 <div className="flex justify-between items-start">
                   <h3 className="text-xl font-bold text-accent mb-2">{tournament.name}</h3>
                   {isOrganizer && (
-                    <button
-                      onClick={() => handleDeleteTournament(tournament.id)}
-                      className="text-text-secondary/60 hover:text-red-500 p-1 rounded"
-                      title="Elimina torneo"
-                    >
-                      <TrashIcon className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openEditTournament(tournament)}
+                        className="text-text-secondary/80 hover:text-text-primary p-1 rounded"
+                        title="Modifica nome torneo"
+                      >
+                        Modifica
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTournament(tournament.id)}
+                        className="text-text-secondary/60 hover:text-red-500 p-1 rounded"
+                        title="Elimina torneo"
+                      >
+                        <TrashIcon className="w-5 h-5" />
+                      </button>
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-3 mb-2">
@@ -268,7 +318,7 @@ const EventView: React.FC<EventViewProps> = ({
             </div>
           ) : (
             <div className="bg-primary p-4 rounded-lg border border-tertiary mt-2 whitespace-pre-line">
-              {event.rules?.trim() ? event.rules : <span className="text-text-secondary">Nessun regolamento inserito.</span>}
+              {event.rules?.trim() ? event.rules : <span className="text-text-secondary">Nessun regolamento inserito dall'organizzatore.</span>}
             </div>
           )}
         </div>
@@ -286,7 +336,7 @@ const EventView: React.FC<EventViewProps> = ({
         ))
       }
 
-      {/* MODAL: AGGIUNGI TORNEO */}
+      {/* ----------------- MODAL: AGGIUNGI TORNEO ----------------- */}
       {isAddTournamentOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
@@ -315,6 +365,31 @@ const EventView: React.FC<EventViewProps> = ({
           </div>
         </div>
       )}
+      {/* ----------------- /MODAL ----------------- */}
+
+      {/* ----------------- MODAL: MODIFICA NOME TORNEO ----------------- */}
+      {editingTournament && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
+            <h4 className="text-lg font-bold mb-4 text-accent">Modifica Nome Torneo</h4>
+            <div className="space-y-4">
+              <input
+                value={editTournamentName}
+                onChange={e => setEditTournamentName(e.target.value)}
+                className="w-full bg-primary border border-tertiary rounded-lg p-2"
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={closeEditTournamentModal} className="bg-tertiary px-4 py-2 rounded">Annulla</button>
+              <button onClick={handleSaveEditTournament} disabled={editTournamentLoading} className="bg-highlight text-white px-4 py-2 rounded font-bold">
+                {editTournamentLoading ? 'Salvando...' : 'Salva Modifica'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ----------------- /MODAL EDIT ----------------- */}
     </div>
   );
 };
