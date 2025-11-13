@@ -28,13 +28,13 @@ const EventView: React.FC<EventViewProps> = ({
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
 
-  // --- NEW: state per "Aggiungi Torneo" modal ---
+  // state per "Aggiungi Torneo"
   const [isAddTournamentOpen, setIsAddTournamentOpen] = useState(false);
   const [newTournamentName, setNewTournamentName] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  // --- NEW: state per "Modifica Torneo" (edit) ---
+  // state per "Modifica Torneo"
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
   const [editTournamentName, setEditTournamentName] = useState<string>('');
   const [editTournamentLoading, setEditTournamentLoading] = useState<boolean>(false);
@@ -129,7 +129,6 @@ const EventView: React.FC<EventViewProps> = ({
   };
 
   const handleDeleteTournament = async (tournamentId: string) => {
-    // opzionale: conferma prima di eliminare
     if (!confirm("Sei sicuro di voler eliminare questo torneo?")) return;
     try {
       const updatedTournaments = (event.tournaments ?? []).filter(t => t.id !== tournamentId);
@@ -184,6 +183,21 @@ const EventView: React.FC<EventViewProps> = ({
     }
   };
 
+  // Helper: count total and completed matches inside a tournament by scanning its groups
+  const countMatchesForTournament = (t: Tournament) => {
+    let total = 0;
+    let completed = 0;
+    (t.groups ?? []).forEach(group => {
+      (group.matches ?? []).forEach((m: any) => {
+        total++;
+        // consider match completed if both scores are present or status indicates finished
+        const isComplete = (m.score1 != null && m.score2 != null) || m.status === 'finished' || m.status === 'completed';
+        if (isComplete) completed++;
+      });
+    });
+    return { total, completed };
+  };
+
   return (
     <div>
       <div className="bg-primary p-6 rounded-xl shadow-lg mb-8">
@@ -214,56 +228,58 @@ const EventView: React.FC<EventViewProps> = ({
       <div>
         <h2 className="text-2xl font-bold text-white mb-4">Tornei</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {(event.tournaments ?? []).map(tournament => (
-            <div key={tournament.id} className="bg-secondary rounded-xl shadow-lg p-4 flex flex-col justify-between">
-              <div>
-                <div className="flex justify-between items-start">
-                  <h3 className="text-xl font-bold text-accent mb-2">{tournament.name}</h3>
-                  {isOrganizer && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => openEditTournament(tournament)}
-                        className="text-text-secondary/80 hover:text-text-primary p-1 rounded"
-                        title="Modifica nome torneo"
-                      >
-                        Modifica
-                      </button>
-                      <button
-                        onClick={() => handleDeleteTournament(tournament.id)}
-                        className="text-text-secondary/60 hover:text-red-500 p-1 rounded"
-                        title="Elimina torneo"
-                      >
-                        <TrashIcon className="w-5 h-5" />
-                      </button>
-                    </div>
-                  )}
+          {(event.tournaments ?? []).map(tournament => {
+            const { total, completed } = countMatchesForTournament(tournament);
+            const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+            return (
+              <div key={tournament.id} className="bg-secondary rounded-xl shadow-lg p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start">
+                    <h3 className="text-xl font-bold text-accent mb-2">{tournament.name}</h3>
+                    {isOrganizer && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openEditTournament(tournament)}
+                          className="text-text-secondary/80 hover:text-text-primary p-1 rounded"
+                          title="Modifica nome torneo"
+                        >
+                          Modifica
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTournament(tournament.id)}
+                          className="text-text-secondary/60 hover:text-red-500 p-1 rounded"
+                          title="Elimina torneo"
+                        >
+                          <TrashIcon className="w-5 h-5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-sm text-text-secondary">
+                      {tournament.groups?.length ?? 0} gironi
+                    </span>
+                  </div>
+                  <div className="text-sm text-text-secondary mb-2">
+                    Progresso
+                  </div>
+                  <div className="w-full bg-tertiary/30 h-2 rounded-full mb-2">
+                    <div className="bg-accent h-2 rounded-full transition-all duration-300" style={{ width: `${percent}%` }}></div>
+                  </div>
+                  <div className="text-xs text-text-secondary mb-2 flex items-center justify-between">
+                    <span>{completed} / {total} partite</span>
+                    <span>{percent}% Completato</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-sm text-text-secondary">
-                    {tournament.groups?.length ?? 0} gironi
-                  </span>
-                </div>
-                <div className="text-sm text-text-secondary mb-2">
-                  Progresso
-                </div>
-                <div className="w-full bg-tertiary/30 h-2 rounded-full mb-2">
-                  <div className="bg-accent h-2 rounded-full transition-all duration-300" style={{ width: `0%` }}></div>
-                </div>
-                <div className="text-xs text-text-secondary mb-2">
-                  0 / {tournament.matches?.length ?? 0} partite
-                </div>
-                <div className="text-xs text-text-secondary mb-2">
-                  0% Completato
-                </div>
+                <button
+                  onClick={() => onSelectTournament(tournament)}
+                  className="bg-accent text-white py-2 px-4 rounded-lg font-bold mt-4"
+                >
+                  Visualizza Torneo
+                </button>
               </div>
-              <button
-                onClick={() => onSelectTournament(tournament)}
-                className="bg-accent text-white py-2 px-4 rounded-lg font-bold mt-4"
-              >
-                Visualizza Torneo
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
