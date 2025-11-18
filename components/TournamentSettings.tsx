@@ -1,4 +1,6 @@
-/* TournamentSettings.tsx - versione aggiornata: merge settings con default e opzione "Andata e Ritorno" per ogni girone */
+/* TournamentSettings.tsx - versione aggiornata: merge settings con default per garantire tieBreakers disponibili
+   + aggiunta opzione "Andata e Ritorno" (groupRoundRobin) per ogni girone. Ho mantenuto TUTTO il file originale
+   e aggiunto solo le parti necessarie per il nuovo flag. */
 import React, { useState, useEffect } from 'react';
 import { type Event, type Tournament, type TournamentSettings, type PointRule, type TieBreaker, PlayoffSetting, ConsolationSetting } from '../types';
 import { TrashIcon, PlusIcon, ArrowUpIcon, ArrowDownIcon } from './Icons';
@@ -25,18 +27,25 @@ const DEFAULT_SETTINGS: TournamentSettings = {
     tieBreakers: ['wins', 'goalDifference', 'headToHead', 'goalsFor'],
     playoffSettings: [],
     consolationSettings: [],
-    hasBronzeFinal: false,
-    // new: groupRoundRobin: map groupId -> boolean (andata e ritorno)
-    groupRoundRobin: {},
+    hasBronzeFinal: false
 } as any;
 
 const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tournament, setEvents }) => {
     // merge incoming tournament.settings with defaults to ensure all fields exist
-    const [settings, setSettings] = useState<TournamentSettings>({ ...DEFAULT_SETTINGS, ...(tournament.settings || {}) });
+    const [settings, setSettings] = useState<TournamentSettings>({
+        ...DEFAULT_SETTINGS,
+        ...(tournament.settings || {}),
+        // ensure groupRoundRobin exists (map groupId -> boolean)
+        groupRoundRobin: (tournament.settings && (tournament.settings as any).groupRoundRobin) ? (tournament.settings as any).groupRoundRobin : {}
+    } as any);
     const [saved, setSaved] = useState(false);
 
     useEffect(() => {
-        setSettings({ ...DEFAULT_SETTINGS, ...(tournament.settings || {}) });
+        setSettings({
+            ...DEFAULT_SETTINGS,
+            ...(tournament.settings || {}),
+            groupRoundRobin: (tournament.settings && (tournament.settings as any).groupRoundRobin) ? (tournament.settings as any).groupRoundRobin : {}
+        } as any);
     }, [tournament]);
 
     const handleRuleChange = (ruleId: string, field: keyof PointRule, value: string) => {
@@ -106,7 +115,7 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
         const num = parseInt(value, 10) || 0;
         
         setSettings(prev => {
-            const existing = prev.consolationSettings.find(s => s.groupId === group.id);
+            const existing = prev.consolationSettings.find(s => s.groupId === groupId);
             let newConsolationSettings: ConsolationSetting[];
             if (existing) {
                 newConsolationSettings = prev.consolationSettings.map(s => 
@@ -132,6 +141,7 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        // persist settings into tournament.settings and save in Firestore
         setEvents(prevEvents => prevEvents.map(ev => 
             ev.id === event.id ? {
                 ...ev,
@@ -215,7 +225,7 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
                      </div>
                 </div>
 
-                {/* Group Round-Robin (Andata e Ritorno) */}
+                {/* Group Round-Robin (Andata e Ritorno) - ADDED */}
                 <div>
                     <h4 className="text-lg font-semibold mb-3 text-text-primary">Andata e Ritorno per Girone</h4>
                     <div className="space-y-2 bg-primary/50 p-4 rounded-lg max-w-md">
