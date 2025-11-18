@@ -118,7 +118,7 @@ const App: React.FC = () => {
           <div className="flex justify-between items-center">
             <h2 className="text-3xl font-bold">I Miei Eventi</h2>
             {isOrganizer && (
-              <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 bg-highlight/80 hover:bg-highlight text-white font-bold py-2 px-4 rounded-lg transition-all shadow-lg shadow-highlight/20">
+              <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 bg-highlight/80 hover:bg-highlight text-white font-bold py-2 px-4 rounded-lg transition-all shadow-l[...]
                 <PlusIcon className="w-5 h-5" />
                 Crea Evento
               </button>
@@ -177,6 +177,7 @@ const App: React.FC = () => {
         onSelectTournament={handleSelectTournament}
         setEvents={setEvents}
         isOrganizer={isOrganizer}
+        loggedInPlayerId={loggedInPlayerId}
       /></div>;
     }
     if (currentView === 'tournament' && currentEventState && currentTournamentState) {
@@ -247,7 +248,7 @@ const App: React.FC = () => {
                 autoFocus
               />
               <div className="flex justify-end gap-4 mt-6">
-                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annulla</button>
+                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annull[...]
                 <button type="submit" className="bg-highlight hover:bg-highlight/80 text-white font-bold py-2 px-4 rounded-lg transition-colors">Crea Evento</button>
               </div>
             </form>
@@ -260,7 +261,7 @@ const App: React.FC = () => {
             <h4 className="text-lg font-bold mb-4">Conferma Eliminazione</h4>
             <p className="text-text-secondary">Sei sicuro di voler eliminare l'evento "{eventToDelete.name}"? Tutti i tornei, gironi e risultati associati verranno persi definitivamente.</p>
             <div className="flex justify-end gap-4 mt-6">
-              <button onClick={() => setEventToDelete(null)} className="bg-tertiary hover:bg-tertiary/80 text-text-primary font-bold py-2 px-4 rounded-lg transition-colors">Annulla</button>
+              <button onClick={() => setEventToDelete(null)} className="bg-tertiary px-4 py-2 rounded-lg transition-colors">Annulla</button>
               <button onClick={handleDeleteEvent} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Elimina Evento</button>
             </div>
           </div>
