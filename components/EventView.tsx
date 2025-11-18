@@ -198,6 +198,13 @@ const EventView: React.FC<EventViewProps> = ({
     return { total, completed };
   };
 
+  // Ordina gli slot globali per data/ora (campo `start`) prima di passarli al componente TimeSlots
+  const sortedGlobalTimeSlots = (event.globalTimeSlots ?? []).slice().sort((a, b) => {
+    const ta = a?.start ? new Date(a.start).getTime() : 0;
+    const tb = b?.start ? new Date(b.start).getTime() : 0;
+    return ta - tb;
+  });
+
   return (
     <div>
       <div className="bg-primary p-6 rounded-xl shadow-lg mb-8">
@@ -231,11 +238,27 @@ const EventView: React.FC<EventViewProps> = ({
           {(event.tournaments ?? []).map(tournament => {
             const { total, completed } = countMatchesForTournament(tournament);
             const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+            // Determina se il giocatore loggato è assegnato a questo torneo (in uno dei suoi gironi)
+            const isMyTournament = !!(loggedInPlayerId && (tournament.groups || []).some(g => (g.playerIds || []).includes(loggedInPlayerId)));
+
             return (
-              <div key={tournament.id} className="bg-secondary rounded-xl shadow-lg p-4 flex flex-col justify-between">
+              <div
+                key={tournament.id}
+                className={`p-4 rounded-xl flex flex-col justify-between transition-all duration-300 ${
+                  isMyTournament ? 'bg-gradient-to-br from-indigo-700 to-indigo-600 ring-2 ring-accent transform scale-[1.01]' : 'bg-secondary'
+                }`}
+              >
                 <div>
                   <div className="flex justify-between items-start">
-                    <h3 className="text-xl font-bold text-accent mb-2">{tournament.name}</h3>
+                    <h3 className="text-xl font-bold text-accent mb-2">
+                      {tournament.name}
+                      {isMyTournament && (
+                        <span className="ml-3 inline-block bg-green-600 text-white text-xs font-semibold px-2 py-0.5 rounded">
+                          Il mio torneo
+                        </span>
+                      )}
+                    </h3>
                     {isOrganizer && (
                       <div className="flex items-center gap-2">
                         <button
@@ -273,7 +296,7 @@ const EventView: React.FC<EventViewProps> = ({
                 </div>
                 <button
                   onClick={() => onSelectTournament(tournament)}
-                  className="bg-accent text-white py-2 px-4 rounded-lg font-bold mt-4"
+                  className={`text-white py-2 px-4 rounded-lg font-bold mt-4 ${isMyTournament ? 'bg-highlight/90 hover:bg-highlight' : 'bg-accent'}`}
                 >
                   Visualizza Torneo
                 </button>
@@ -294,7 +317,7 @@ const EventView: React.FC<EventViewProps> = ({
             isOrganizer={isOrganizer}
             loggedInPlayerId={loggedInPlayerId}
             selectedGroupId={undefined}
-            globalTimeSlots={event.globalTimeSlots}
+            globalTimeSlots={sortedGlobalTimeSlots}
           />
         </div>
       )}
@@ -373,5 +396,18 @@ const EventView: React.FC<EventViewProps> = ({
 
               <div className="flex justify-end gap-3">
                 <button onClick={cancelAddTournament} className="bg-tertiary px-4 py-2 rounded">Annulla</button>
-                <button 
- 
+                <button type="submit" disabled={addLoading} className="bg-highlight text-white px-4 py-2 rounded font-bold">
+                  {addLoading ? 'Creazione...' : 'Crea Torneo'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ----------------- /MODAL ----------------- */}
+
+    </div>
+  );
+};
+
+export default EventView;
