@@ -1,4 +1,4 @@
-/* TournamentSettings.tsx - versione aggiornata: merge settings con default per garantire tieBreakers disponibili */
+/* TournamentSettings.tsx - versione aggiornata: merge settings con default e opzione "Andata e Ritorno" per ogni girone */
 import React, { useState, useEffect } from 'react';
 import { type Event, type Tournament, type TournamentSettings, type PointRule, type TieBreaker, PlayoffSetting, ConsolationSetting } from '../types';
 import { TrashIcon, PlusIcon, ArrowUpIcon, ArrowDownIcon } from './Icons';
@@ -25,7 +25,9 @@ const DEFAULT_SETTINGS: TournamentSettings = {
     tieBreakers: ['wins', 'goalDifference', 'headToHead', 'goalsFor'],
     playoffSettings: [],
     consolationSettings: [],
-    hasBronzeFinal: false
+    hasBronzeFinal: false,
+    // new: groupRoundRobin: map groupId -> boolean (andata e ritorno)
+    groupRoundRobin: {},
 } as any;
 
 const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tournament, setEvents }) => {
@@ -104,7 +106,7 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
         const num = parseInt(value, 10) || 0;
         
         setSettings(prev => {
-            const existing = prev.consolationSettings.find(s => s.groupId === groupId);
+            const existing = prev.consolationSettings.find(s => s.groupId === group.id);
             let newConsolationSettings: ConsolationSetting[];
             if (existing) {
                 newConsolationSettings = prev.consolationSettings.map(s => 
@@ -116,6 +118,15 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
             newConsolationSettings = newConsolationSettings.filter(s => s.startRank !== 0 || s.endRank !== 0);
 
             return {...prev, consolationSettings: newConsolationSettings};
+        });
+    };
+
+    // NEW: toggle andata e ritorno per gruppo (groupRoundRobin map)
+    const toggleGroupRoundRobin = (groupId: string) => {
+        setSettings(prev => {
+            const gr = { ...(prev.groupRoundRobin || {}) } as Record<string, boolean>;
+            gr[groupId] = !gr[groupId];
+            return { ...prev, groupRoundRobin: gr };
         });
     };
 
@@ -202,6 +213,29 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
                             </div>
                         ))}
                      </div>
+                </div>
+
+                {/* Group Round-Robin (Andata e Ritorno) */}
+                <div>
+                    <h4 className="text-lg font-semibold mb-3 text-text-primary">Andata e Ritorno per Girone</h4>
+                    <div className="space-y-2 bg-primary/50 p-4 rounded-lg max-w-md">
+                        {Array.isArray(tournament.groups) && tournament.groups.length > 0 ? (
+                            tournament.groups.map(group => {
+                                const isDouble = !!(settings.groupRoundRobin && settings.groupRoundRobin[group.id]);
+                                return (
+                                    <div key={group.id} className="flex items-center justify-between bg-tertiary/50 p-2 rounded-lg">
+                                        <div className="font-medium">{group.name}</div>
+                                        <label className="flex items-center gap-2">
+                                            <input type="checkbox" checked={isDouble} onChange={() => toggleGroupRoundRobin(group.id)} />
+                                            <span className="text-sm">Andata e Ritorno</span>
+                                        </label>
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <p className="text-text-secondary">Nessun girone creato per questo torneo.</p>
+                        )}
+                    </div>
                 </div>
 
                  {/* Playoff Settings */}
