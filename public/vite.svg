@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none">
-  <rect width="128" height="128" rx="24" fill="#0f172a"/>
-  <g transform="translate(16,16)" fill="none" stroke="#22d3ee" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 80 L40 8 L72 96 L104 8" />
-  </g>
-  <text x="64" y="112" font-family="Inter, Arial, sans-serif" font-size="10" fill="#e2e8f0" text-anchor="middle">Tournament</text>
-</svg>
