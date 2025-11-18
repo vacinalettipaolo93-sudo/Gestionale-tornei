@@ -1,6 +1,4 @@
-/* TournamentSettings.tsx - versione aggiornata: merge settings con default per garantire tieBreakers disponibili
-   + aggiunta opzione "Andata e Ritorno" (groupRoundRobin) per ogni girone. Ho mantenuto TUTTO il file originale
-   e aggiunto solo le parti necessarie per il nuovo flag. */
+/* TournamentSettings.tsx - versione aggiornata: merge settings con default per garantire tieBreakers disponibili */
 import React, { useState, useEffect } from 'react';
 import { type Event, type Tournament, type TournamentSettings, type PointRule, type TieBreaker, PlayoffSetting, ConsolationSetting } from '../types';
 import { TrashIcon, PlusIcon, ArrowUpIcon, ArrowDownIcon } from './Icons';
@@ -32,20 +30,11 @@ const DEFAULT_SETTINGS: TournamentSettings = {
 
 const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tournament, setEvents }) => {
     // merge incoming tournament.settings with defaults to ensure all fields exist
-    const [settings, setSettings] = useState<TournamentSettings>({
-        ...DEFAULT_SETTINGS,
-        ...(tournament.settings || {}),
-        // ensure groupRoundRobin exists (map groupId -> boolean)
-        groupRoundRobin: (tournament.settings && (tournament.settings as any).groupRoundRobin) ? (tournament.settings as any).groupRoundRobin : {}
-    } as any);
+    const [settings, setSettings] = useState<TournamentSettings>({ ...DEFAULT_SETTINGS, ...(tournament.settings || {}) });
     const [saved, setSaved] = useState(false);
 
     useEffect(() => {
-        setSettings({
-            ...DEFAULT_SETTINGS,
-            ...(tournament.settings || {}),
-            groupRoundRobin: (tournament.settings && (tournament.settings as any).groupRoundRobin) ? (tournament.settings as any).groupRoundRobin : {}
-        } as any);
+        setSettings({ ...DEFAULT_SETTINGS, ...(tournament.settings || {}) });
     }, [tournament]);
 
     const handleRuleChange = (ruleId: string, field: keyof PointRule, value: string) => {
@@ -130,18 +119,8 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
         });
     };
 
-    // NEW: toggle andata e ritorno per gruppo (groupRoundRobin map)
-    const toggleGroupRoundRobin = (groupId: string) => {
-        setSettings(prev => {
-            const gr = { ...(prev.groupRoundRobin || {}) } as Record<string, boolean>;
-            gr[groupId] = !gr[groupId];
-            return { ...prev, groupRoundRobin: gr };
-        });
-    };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // persist settings into tournament.settings and save in Firestore
         setEvents(prevEvents => prevEvents.map(ev => 
             ev.id === event.id ? {
                 ...ev,
@@ -223,29 +202,6 @@ const TournamentSettings: React.FC<TournamentSettingsProps> = ({ event, tourname
                             </div>
                         ))}
                      </div>
-                </div>
-
-                {/* Group Round-Robin (Andata e Ritorno) - ADDED */}
-                <div>
-                    <h4 className="text-lg font-semibold mb-3 text-text-primary">Andata e Ritorno per Girone</h4>
-                    <div className="space-y-2 bg-primary/50 p-4 rounded-lg max-w-md">
-                        {Array.isArray(tournament.groups) && tournament.groups.length > 0 ? (
-                            tournament.groups.map(group => {
-                                const isDouble = !!(settings.groupRoundRobin && settings.groupRoundRobin[group.id]);
-                                return (
-                                    <div key={group.id} className="flex items-center justify-between bg-tertiary/50 p-2 rounded-lg">
-                                        <div className="font-medium">{group.name}</div>
-                                        <label className="flex items-center gap-2">
-                                            <input type="checkbox" checked={isDouble} onChange={() => toggleGroupRoundRobin(group.id)} />
-                                            <span className="text-sm">Andata e Ritorno</span>
-                                        </label>
-                                    </div>
-                                );
-                            })
-                        ) : (
-                            <p className="text-text-secondary">Nessun girone creato per questo torneo.</p>
-                        )}
-                    </div>
                 </div>
 
                  {/* Playoff Settings */}
