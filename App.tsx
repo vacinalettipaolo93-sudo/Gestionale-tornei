@@ -13,6 +13,17 @@ import { collection, onSnapshot, addDoc, deleteDoc, doc } from "firebase/firesto
 
 type View = 'dashboard' | 'event' | 'tournament';
 
+type TournamentTab =
+  | 'standings'
+  | 'matches'
+  | 'participants'
+  | 'playoffs'
+  | 'consolation'
+  | 'groups'
+  | 'settings'
+  | 'rules'
+  | 'players';
+
 const App: React.FC = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -21,6 +32,10 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
+
+  // NEW: states to carry initial tab and group when opening a tournament
+  const [tournamentInitialTab, setTournamentInitialTab] = useState<TournamentTab | undefined>(undefined);
+  const [tournamentInitialGroupId, setTournamentInitialGroupId] = useState<string | undefined>(undefined);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -45,12 +60,18 @@ const App: React.FC = () => {
   }, []);
 
   const handleSelectEvent = (event: Event) => {
+    // clear any tournament initial params when navigating between events
+    setTournamentInitialTab(undefined);
+    setTournamentInitialGroupId(undefined);
     setSelectedEvent(event);
     setCurrentView('event');
   };
 
-  const handleSelectTournament = (tournament: Tournament) => {
+  // Now accepts optional tab and groupId so we can open TournamentView directly on a tab
+  const handleSelectTournament = (tournament: Tournament, initialTab?: TournamentTab, initialGroupId?: string) => {
     setSelectedTournament(tournament);
+    setTournamentInitialTab(initialTab);
+    setTournamentInitialGroupId(initialGroupId);
     setCurrentView('tournament');
   };
 
@@ -58,6 +79,8 @@ const App: React.FC = () => {
     if (currentView === 'tournament') {
       setCurrentView('event');
       setSelectedTournament(null);
+      setTournamentInitialTab(undefined);
+      setTournamentInitialGroupId(undefined);
     } else if (currentView === 'event') {
       setCurrentView('dashboard');
       setSelectedEvent(null);
@@ -90,6 +113,8 @@ const App: React.FC = () => {
     setCurrentView('dashboard');
     setSelectedEvent(null);
     setSelectedTournament(null);
+    setTournamentInitialTab(undefined);
+    setTournamentInitialGroupId(undefined);
   };
 
   const currentEventState = useMemo(() => events.find(e => e.id === selectedEvent?.id), [events, selectedEvent]);
@@ -211,6 +236,8 @@ const App: React.FC = () => {
             setEvents={setEvents}
             isOrganizer={isOrganizer}
             loggedInPlayerId={loggedInPlayerId}
+            initialActiveTab={tournamentInitialTab}
+            initialSelectedGroupId={tournamentInitialGroupId}
             onPlayerContact={setContactPlayer}
           />
         </div>
