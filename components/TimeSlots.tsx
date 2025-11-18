@@ -210,29 +210,43 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             <p className="text-gray-400 font-bold">Nessuna partita programmata.</p>
           ) : (
             <ul className="space-y-2">
-              {Object.entries(scheduledSlotsData).map(([slotId, { match, group, tournament }]) => {
-                const slot = globalTimeSlots.find(s => s.id === slotId);
-                if (!slot) return null;
-                const player1 = event.players.find(p => p.id === match.player1Id)?.name || match.player1Id;
-                const player2 = event.players.find(p => p.id === match.player2Id)?.name || match.player2Id;
-                return (
-                  <li key={slot.id} className="flex flex-col px-2 py-2 rounded bg-[#22283A] mb-2">
-                    <span className="font-bold text-white">
-                      {formatDateTime(slot.start)} - {slot.location} - {slot.field}
-                    </span>
-                    <span className="font-bold text-accent">
-                      Partita programmata:
-                    </span>
-                    <span className="text-white font-bold">
-                      {player1} vs {player2}
-                      {" "}({tournament.name}, girone: {group.name})
-                    </span>
-                    <span className="text-sm text-gray-300">
-                      Stato: Programmata
-                    </span>
-                  </li>
-                );
-              })}
+              {/*
+                Costruiamo un array di entry { slot, match, group, tournament }
+                e lo ordiniamo per slot.start (data/ora), così la visualizzazione è cronologica.
+              */}
+              {Object.entries(scheduledSlotsData)
+                .map(([slotId, payload]) => {
+                  const slot = globalTimeSlots.find(s => s.id === slotId);
+                  if (!slot) return null;
+                  return { slot, ...payload };
+                })
+                .filter(Boolean)
+                .sort((a, b) => {
+                  const ta = a.slot?.start ? new Date(a.slot.start).getTime() : 0;
+                  const tb = b.slot?.start ? new Date(b.slot.start).getTime() : 0;
+                  return ta - tb;
+                })
+                .map(({ slot, match, group, tournament }) => {
+                  const player1 = event.players.find(p => p.id === match.player1Id)?.name || match.player1Id;
+                  const player2 = event.players.find(p => p.id === match.player2Id)?.name || match.player2Id;
+                  return (
+                    <li key={slot.id} className="flex flex-col px-2 py-2 rounded bg-[#22283A] mb-2">
+                      <span className="font-bold text-white">
+                        {formatDateTime(slot.start)} - {slot.location} - {slot.field}
+                      </span>
+                      <span className="font-bold text-accent">
+                        Partita programmata:
+                      </span>
+                      <span className="text-white font-bold">
+                        {player1} vs {player2}
+                        {" "}({tournament.name}, girone: {group.name})
+                      </span>
+                      <span className="text-sm text-gray-300">
+                        Stato: Programmata
+                      </span>
+                    </li>
+                  );
+                })}
             </ul>
           )}
         </div>
