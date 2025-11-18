@@ -5,93 +5,39 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tournament Manager Pro</title>
-
-    <!-- CDN Tailwind (rimane) -->
-    <script id="tw-cdn" src="https://cdn.tailwindcss.com"></script>
-
-    <!-- Sicurezza: applica la config SOLO dopo che il CDN è caricato -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      (function() {
-        const config = {
-          theme: {
-            extend: {
-              colors: {
-                'primary': '#0f172a', // slate-900
-                'secondary': '#1e293b', // slate-800
-                'tertiary': '#334155', // slate-700
-                'accent': '#22d3ee', // cyan-400
-                'accent-hover': '#67e8f9', // cyan-300
-                'highlight': '#8b5cf6', // violet-500
-                'text-primary': '#e2e8f0', // slate-200
-                'text-secondary': '#94a3b8', // slate-400
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'primary': '#0f172a', // slate-900
+              'secondary': '#1e293b', // slate-800
+              'tertiary': '#334155', // slate-700
+              'accent': '#22d3ee', // cyan-400
+              'accent-hover': '#67e8f9', // cyan-300
+              'highlight': '#8b5cf6', // violet-500
+              'text-primary': '#e2e8f0', // slate-200
+              'text-secondary': '#94a3b8', // slate-400
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: 0, transform: 'translateY(10px)' },
+                '100%': { opacity: 1, transform: 'translateY(0)' },
               },
-              keyframes: {
-                fadeIn: {
-                  '0%': { opacity: 0, transform: 'translateY(10px)' },
-                  '100%': { opacity: 1, transform: 'translateY(0)' },
-                },
-                subtlePulse: {
-                  '0%, 100%': { opacity: 0.7 },
-                  '50%': { opacity: 1 },
-                }
-              },
-              animation: {
-                fadeIn: 'fadeIn 0.5s ease-out forwards',
-                subtlePulse: 'subtlePulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              subtlePulse: {
+                '0%, 100%': { opacity: 0.7 },
+                '50%': { opacity: 1 },
               }
+            },
+            animation: {
+              fadeIn: 'fadeIn 0.5s ease-out forwards',
+              subtlePulse: 'subtlePulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
             }
-          }
-        };
-
-        // Helper: apply config now if tailwind exists
-        function applyConfig() {
-          try {
-            if (typeof tailwind !== 'undefined' && tailwind && typeof tailwind.config !== 'undefined') {
-              // If tailwind global exists, set config directly
-              tailwind.config = Object.assign({}, tailwind.config || {}, config);
-            } else if (typeof window !== 'undefined') {
-              // store pending config to apply later when tailwind loads
-              window.__pendingTailwindConfig = Object.assign({}, window.__pendingTailwindConfig || {}, config);
-            }
-          } catch (e) {
-            // non fatale, log per debug
-            console.warn('Could not apply Tailwind config immediately:', e);
           }
         }
-
-        // Try apply now (covers synchronous load cases)
-        applyConfig();
-
-        // If tailwind not loaded yet, attach listener to CDN script load
-        const s = document.getElementById('tw-cdn');
-        if (s) {
-          s.addEventListener('load', () => {
-            try {
-              // apply any pending config stored earlier
-              if (typeof tailwind !== 'undefined' && window.__pendingTailwindConfig) {
-                tailwind.config = Object.assign({}, tailwind.config || {}, window.__pendingTailwindConfig);
-                window.__pendingTailwindConfig = null;
-              }
-            } catch (err) {
-              console.warn('Error applying pending Tailwind config on load:', err);
-            }
-          }, { once: true });
-        }
-
-        // Also in case the whole page loads and tailwind becomes available later
-        window.addEventListener('load', () => {
-          try {
-            if (typeof tailwind !== 'undefined' && window.__pendingTailwindConfig) {
-              tailwind.config = Object.assign({}, tailwind.config || {}, window.__pendingTailwindConfig);
-              window.__pendingTailwindConfig = null;
-            }
-          } catch (err) {
-            // fallback no-op
-          }
-        });
-      })();
+      }
     </script>
-
     <style>
       body {
         -webkit-font-smoothing: antialiased;
@@ -104,7 +50,6 @@
         z-index: 1;
       }
     </style>
-
     <script type="importmap">
     {
       "imports": {
