@@ -251,11 +251,19 @@ const EventView: React.FC<EventViewProps> = ({
             const isMyTournament = !!(loggedInPlayerId && (tournament.groups || []).some(g => (g.playerIds || []).includes(loggedInPlayerId)));
             const myGroupId = getPlayerGroupId(tournament, loggedInPlayerId);
 
+            // conditional classes for highlight
+            const cardBase = 'p-4 rounded-xl flex flex-col justify-between transition-all duration-300';
+            const highlightClasses = 'bg-gradient-to-br from-indigo-700 to-indigo-600 ring-2 ring-accent transform scale-[1.01]';
+            const normalClasses = 'bg-secondary';
+            const cardClasses = `${cardBase} ${isMyTournament ? highlightClasses : normalClasses}`;
+
+            const titleClass = `text-xl font-bold mb-2 ${isMyTournament ? 'text-white' : 'text-accent'}`;
+
             return (
-              <div key={tournament.id} className={`bg-secondary rounded-xl shadow-lg p-4 flex flex-col justify-between`}>
+              <div key={tournament.id} className={cardClasses}>
                 <div>
                   <div className="flex justify-between items-start">
-                    <h3 className="text-xl font-bold text-accent mb-2">{tournament.name}</h3>
+                    <h3 className={titleClass}>{tournament.name}</h3>
                     {isOrganizer && (
                       <div className="flex items-center gap-2">
                         <button
@@ -448,7 +456,7 @@ const EventView: React.FC<EventViewProps> = ({
           </div>
         </div>
       )}
-      {/* ----------------- /MODAL ----------------- */}
+      {/* ----------------- /MODAL: AGGIUNGI TORNEO ----------------- */}
 
     </div>
   );
