@@ -198,6 +198,13 @@ const EventView: React.FC<EventViewProps> = ({
     return { total, completed };
   };
 
+  // Ordina gli slot globali per data/ora (campo `start`) prima di passarli al componente TimeSlots
+  const sortedGlobalTimeSlots = (event.globalTimeSlots ?? []).slice().sort((a, b) => {
+    const ta = a?.start ? new Date(a.start).getTime() : 0;
+    const tb = b?.start ? new Date(b.start).getTime() : 0;
+    return ta - tb;
+  });
+
   return (
     <div>
       <div className="bg-primary p-6 rounded-xl shadow-lg mb-8">
@@ -294,7 +301,7 @@ const EventView: React.FC<EventViewProps> = ({
             isOrganizer={isOrganizer}
             loggedInPlayerId={loggedInPlayerId}
             selectedGroupId={undefined}
-            globalTimeSlots={event.globalTimeSlots}
+            globalTimeSlots={sortedGlobalTimeSlots}
           />
         </div>
       )}
