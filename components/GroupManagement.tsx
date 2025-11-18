@@ -32,18 +32,13 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // SEARCH for assign modal (added) - keep empty by default
+    // SEARCH for assign modal (ADDED)
     const [assignSearchQuery, setAssignSearchQuery] = useState('');
 
     const openAssignModal = (group: Group) => {
         setAssigningGroup(group);
         setSelectedPlayers(new Set(group.playerIds));
-        setAssignSearchQuery('');
-        // small delay to ensure modal is in DOM before attempting to focus
-        setTimeout(() => {
-          const el = document.getElementById('assignSearchInput') as HTMLInputElement | null;
-          el?.focus();
-        }, 50);
+        setAssignSearchQuery(''); // reset search when opening
     };
 
     const handlePlayerSelection = (playerId: string) => {
@@ -133,9 +128,13 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
             return;
         }
 
+        // Determine if this group must be double round-robin (andata e ritorno)
+        const isDouble = !!(tournament.settings?.groupRoundRobin && tournament.settings.groupRoundRobin[group.id]);
+
         const newMatches: Match[] = [];
         for (let i = 0; i < group.playerIds.length; i++) {
             for (let j = i + 1; j < group.playerIds.length; j++) {
+                // match A vs B
                 newMatches.push({
                     id: `m${Date.now()}${i}${j}`,
                     player1Id: group.playerIds[i],
@@ -144,6 +143,17 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                     score2: null,
                     status: 'pending',
                 });
+                // if double round-robin, add reverse fixture
+                if (isDouble) {
+                  newMatches.push({
+                      id: `m${Date.now()}${j}${i}_r`,
+                      player1Id: group.playerIds[j],
+                      player2Id: group.playerIds[i],
+                      score1: null,
+                      score2: null,
+                      status: 'pending',
+                  });
+                }
             }
         }
 
@@ -305,7 +315,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
 
     const getPlayer = (id: string) => event.players.find(p => p.id === id);
 
-    // Filtered + sorted players for assign modal: alphabetical and searchable
+    // Filtered + sorted players for assign modal: alphabetical and searchable (ADDED)
     const filteredAssignPlayers = useMemo(() => {
         const q = assignSearchQuery.trim().toLowerCase();
         return (event.players ?? [])
@@ -409,7 +419,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                             Assegna Giocatori a {assigningGroup.name}
                         </h4>
 
-                        {/* SEARCH INPUT: only change in modal */}
+                        {/* SEARCH INPUT: ADDED */}
                         <div className="mb-3">
                           <input
                             id="assignSearchInput"
@@ -418,6 +428,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                             onChange={e => setAssignSearchQuery(e.target.value)}
                             placeholder="Cerca giocatore..."
                             className="w-full bg-primary border border-tertiary rounded px-3 py-2"
+                            autoFocus
                           />
                         </div>
 
@@ -471,7 +482,7 @@ const GroupManagement: React.FC<GroupManagementProps> = ({ event, tournament, se
                             autoFocus
                         />
                         <label className="text-sm text-text-secondary">Numero attuale di giocatori: {editingGroup.playerIds.length}</label>
-                        <p className="text-sm text-text-secondary mb-2">Per modificare i giocatori usa "Assegna Giocatori". Ridurre il numero rimuoverà i giocatori oltre la dimensione scelta e le lor...</p>
+                        <p className="text-sm text-text-secondary mb-2">Per modificare i giocatori usa "Assegna Giocatori". Ridurre il numero rimuoverà i giocatori oltre la dimensione scelta e le loro partite verranno eliminate.</p>
                         <div className="mb-2">
                             <label className="text-sm text-text-secondary">Regolamento del girone</label>
                             <textarea
