@@ -32,6 +32,19 @@ function getBookedSlotsData(event: Event) {
   return booked;
 }
 
+// Formatting: da ISO -> "gg/mm/aaaa, hh:mm"
+function formatDateTime(dateStr: string) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const gg = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const aaaa = d.getFullYear();
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${gg}/${mm}/${aaaa}, ${h}:${min}`;
+}
+
 // Nuovo helper: mostra SOLO le partite programmate (status === "scheduled") nello spazio slot prenotati
 function getScheduledSlotsData(event: Event) {
   const scheduled: Record<string, { match: Match; group: Group; tournament: Tournament }> = {};
@@ -45,68 +58,6 @@ function getScheduledSlotsData(event: Event) {
     });
   });
   return scheduled;
-}
-
-// Formatting: da ISO -> "gg/mm/aaaa, hh:mm"
-function formatDateTime(dateStr: string) {
-  if (!dateStr) return "";
-  const d = new Date(dateStr);
-  if (!isNaN(d.getTime())) {
-    const gg = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const aaaa = d.getFullYear();
-    const h = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
-    return `${gg}/${mm}/${aaaa}, ${h}:${min}`;
-  }
-  // se non è ISO, prova a rileggere formati comuni (es. "2025-11-23 09:00" o "23/11/2025, 09:00")
-  // tenta parse dd/mm/yyyy, hh:mm
-  const dm = dateStr.match(/^\s*(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s*(\d{1,2}):(\d{2})\s*$/);
-  if (dm) {
-    const [, dD, dM, dY, dH, dMin] = dm;
-    const dObj = new Date(Number(dY), Number(dM) - 1, Number(dD), Number(dH), Number(dMin));
-    if (!isNaN(dObj.getTime())) {
-      const gg = String(dObj.getDate()).padStart(2, '0');
-      const mm = String(dObj.getMonth() + 1).padStart(2, '0');
-      const aaaa = dObj.getFullYear();
-      const h = String(dObj.getHours()).padStart(2, '0');
-      const min = String(dObj.getMinutes()).padStart(2, '0');
-      return `${gg}/${mm}/${aaaa}, ${h}:${min}`;
-    }
-  }
-  return dateStr;
-}
-
-// Robust date parser -> ritorna timestamp (number). Se non riesce, ritorna 0 (in fondo all'ordinamento).
-function parseSlotStartToTimestamp(start?: string | null): number {
-  if (!start) return 0;
-  // 1) prova parse nativo (ISO o similar)
-  const dNative = new Date(start);
-  if (!isNaN(dNative.getTime())) return dNative.getTime();
-
-  // 2) prova formato "YYYY-MM-DD HH:mm" o "YYYY-MM-DDTHH:mm"
-  const isoLike = start.trim().replace(' ', 'T');
-  const dIsoLike = new Date(isoLike);
-  if (!isNaN(dIsoLike.getTime())) return dIsoLike.getTime();
-
-  // 3) prova formato "DD/MM/YYYY, HH:mm" o "DD/MM/YYYY HH:mm"
-  const m = start.match(/^\s*(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s*(\d{1,2}):(\d{2})\s*$/);
-  if (m) {
-    const [, dd, mm, yyyy, hh, min] = m;
-    const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(min));
-    if (!isNaN(d.getTime())) return d.getTime();
-  }
-
-  // 4) prova "MM/DD/YYYY" fallback (meno probabile in Italia)
-  const m2 = start.match(/^\s*(\d{1,2})-(\d{1,2})-(\d{4})[T\s](\d{1,2}):(\d{2})/);
-  if (m2) {
-    const [, mo, da, yr, hh, min] = m2;
-    const d = new Date(Number(yr), Number(mo) - 1, Number(da), Number(hh), Number(min));
-    if (!isNaN(d.getTime())) return d.getTime();
-  }
-
-  // non parsed -> 0
-  return 0;
 }
 
 const TimeSlots: React.FC<TimeSlotsProps> = ({
@@ -252,7 +203,6 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             </ul>
           )}
         </div>
-
         {/* SLOT PRENOTATI: SOLO PARTITE PROGRAMMATE (scheduled) */}
         <div className="bg-[#212737] rounded-xl shadow-lg p-5 mb-6 w-full max-w-xl">
           <h4 className="font-bold text-[#3AF2C5] text-lg mb-3">Slot prenotati</h4>
@@ -262,7 +212,7 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
             <ul className="space-y-2">
               {/*
                 Costruiamo un array di entry { slot, match, group, tournament }
-                lo normalizziamo/filtriamo e lo ordiniamo per data/ora (timestamp robusto)
+                e lo ordiniamo per slot.start (data/ora), così la visualizzazione è cronologica.
               */}
               {Object.entries(scheduledSlotsData)
                 .map(([slotId, payload]) => {
@@ -272,9 +222,8 @@ const TimeSlots: React.FC<TimeSlotsProps> = ({
                 })
                 .filter(Boolean)
                 .sort((a, b) => {
-                  const ta = parseSlotStartToTimestamp(a.slot?.start);
-                  const tb = parseSlotStartToTimestamp(b.slot?.start);
-                  // elementi non parsed (0) finiscono in fondo
+                  const ta = a.slot?.start ? new Date(a.slot.start).getTime() : 0;
+                  const tb = b.slot?.start ? new Date(b.slot.start).getTime() : 0;
                   return ta - tb;
                 })
                 .map(({ slot, match, group, tournament }) => {
