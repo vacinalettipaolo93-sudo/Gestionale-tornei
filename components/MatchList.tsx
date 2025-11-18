@@ -178,6 +178,14 @@ const MatchList: React.FC<MatchListProps> = ({
   
   const completedMatches = group.matches.filter(m => m.score1 != null && m.score2 != null);
 
+  // Optional: ordina le liste per scheduledTime quando disponibile (stabile)
+  const sortByTime = (arr: Match[]) =>
+    arr.slice().sort((a, b) => {
+      const ta = a.scheduledTime ? new Date(a.scheduledTime).getTime() : 0;
+      const tb = b.scheduledTime ? new Date(b.scheduledTime).getTime() : 0;
+      return ta - tb;
+    });
+
   return (
     <div className="space-y-6">
       {!isOrganizer && (
@@ -199,6 +207,31 @@ const MatchList: React.FC<MatchListProps> = ({
         </div>
       )}
 
+      {/* ORDINE RICHIESTO: 1) Programmate, 2) Da Fare, 3) Completate */}
+
+      <div>
+        <h4 className="text-lg font-semibold mb-3 text-accent">Partite Programmate</h4>
+        <div className="space-y-3">
+          {scheduledMatches.length > 0 ? sortByTime(scheduledMatches).map(match => (
+            <MatchCard
+              key={match.id}
+              match={match}
+              player1={getPlayer(match.player1Id)}
+              player2={getPlayer(match.player2Id)}
+              onEditResult={onEditResult}
+              onBookMatch={onBookMatch}
+              isOrganizer={isOrganizer}
+              loggedInPlayerId={loggedInPlayerId}
+              onPlayerContact={onPlayerContact}
+              onRescheduleMatch={onRescheduleMatch}
+              onCancelBooking={onCancelBooking}
+              onDeleteResult={onDeleteResult}
+              viewingOwnGroup={viewingOwnGroup}
+            />
+          )) : <p className="text-text-secondary text-center py-4">Nessuna partita programmata.</p>}
+        </div>
+      </div>
+
       <div>
         <h4 className="text-lg font-semibold mb-3 text-accent">Partite da Fare</h4>
         <div className="space-y-3">
@@ -219,29 +252,6 @@ const MatchList: React.FC<MatchListProps> = ({
               viewingOwnGroup={viewingOwnGroup}
             />
           )) : <p className="text-text-secondary text-center py-4">Nessuna partita da disputare.</p>}
-        </div>
-      </div>
-
-      <div>
-        <h4 className="text-lg font-semibold mb-3 text-accent">Partite Programmate</h4>
-        <div className="space-y-3">
-          {scheduledMatches.length > 0 ? scheduledMatches.map(match => (
-            <MatchCard
-              key={match.id}
-              match={match}
-              player1={getPlayer(match.player1Id)}
-              player2={getPlayer(match.player2Id)}
-              onEditResult={onEditResult}
-              onBookMatch={onBookMatch}
-              isOrganizer={isOrganizer}
-              loggedInPlayerId={loggedInPlayerId}
-              onPlayerContact={onPlayerContact}
-              onRescheduleMatch={onRescheduleMatch}
-              onCancelBooking={onCancelBooking}
-              onDeleteResult={onDeleteResult}
-              viewingOwnGroup={viewingOwnGroup}
-            />
-          )) : <p className="text-text-secondary text-center py-4">Nessuna partita programmata.</p>}
         </div>
       </div>
 
