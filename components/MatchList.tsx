@@ -70,7 +70,11 @@ const MatchCard: React.FC<{
         {/* Player 1 - SINISTRA */}
         <div className="flex items-center gap-3 justify-start">
           <img src={player1.avatar} alt={player1.name} className="w-10 h-10 rounded-full object-cover" />
-          <button onClick={() => onPlayerContact(player1)} className="text-left font-semibold hover:underline text-text-primary cursor-pointer">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onPlayerContact(player1); }}
+            className="text-left font-semibold hover:underline text-text-primary cursor-pointer"
+          >
             {player1.name}
           </button>
         </div>
@@ -100,7 +104,11 @@ const MatchCard: React.FC<{
 
         {/* Player 2 - DESTRA */}
         <div className="flex items-center gap-3 justify-end">
-          <button onClick={() => onPlayerContact(player2)} className="font-semibold hover:underline text-text-primary cursor-pointer">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onPlayerContact(player2); }}
+            className="font-semibold hover:underline text-text-primary cursor-pointer"
+          >
             {player2.name}
           </button>
           <img src={player2.avatar} alt={player2.name} className="w-10 h-10 rounded-full object-cover" />
@@ -111,7 +119,7 @@ const MatchCard: React.FC<{
         {match.status === 'pending' && canBook && (
           <button
             onClick={(e) => {
-              // stop propagation to avoid parent handlers interfering
+              // prevent parent handlers from interfering
               e.stopPropagation();
               // diagnostic log to confirm click arrives here
               console.log('[MatchList] Prenota button clicked, match id=', match?.id, ' onBookMatch present?', typeof onBookMatch === 'function');
@@ -132,22 +140,46 @@ const MatchCard: React.FC<{
           </button>
         )}
         {canEnterResult && (
-          <button onClick={() => onEditResult(match)} className="bg-highlight/80 hover:bg-highlight text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onEditResult(match); }}
+            className="bg-highlight/80 hover:bg-highlight text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors"
+          >
             Risultato
           </button>
         )}
         {match.status === 'scheduled' && canManageBooking && onRescheduleMatch && (
-          <button onClick={() => onRescheduleMatch(match)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onRescheduleMatch(match); }}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors"
+          >
             Modifica pren.
           </button>
         )}
         {match.status === 'scheduled' && canManageBooking && onCancelBooking && (
-          <button onClick={() => onCancelBooking(match)} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onCancelBooking(match); }}
+            className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors"
+          >
             Annulla pren.
           </button>
         )}
         {match.score1 != null && match.score2 != null && canDeleteResult && onDeleteResult && (
-          <button onClick={() => onDeleteResult(match)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              console.log('[MatchList] Elimina risultato clicked, match id=', match?.id, ' onDeleteResult present?', typeof onDeleteResult === 'function');
+              try {
+                onDeleteResult(match);
+              } catch (err) {
+                console.error('[MatchList] Error calling onDeleteResult:', err);
+              }
+            }}
+            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors"
+          >
             Elimina risultato
           </button>
         )}
@@ -212,12 +244,14 @@ const MatchList: React.FC<MatchListProps> = ({
             <button
               onClick={() => setFilter('my')}
               className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors ${filter === 'my' ? 'bg-highlight text-white' : 'text-text-secondary'}`}
+              type="button"
             >
               Le mie
             </button>
             <button
               onClick={() => setFilter('all')}
               className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors ${filter === 'all' ? 'bg-highlight text-white' : 'text-text-secondary'}`}
+              type="button"
             >
               Tutte
             </button>
