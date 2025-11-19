@@ -444,7 +444,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
               isOrganizer={isOrganizer}
               loggedInPlayerId={loggedInPlayerId}
               onPlayerContact={handlePlayerContact}
-              onRescheduleMatch={handleRescheduleMatch}
+              onRescheduleMatch={onRescheduleMatch}
               onCancelBooking={handleCancelBooking}
               onDeleteResult={match => setDeletingMatch(match)}
               viewingOwnGroup={selectedGroup.playerIds.includes(loggedInPlayerId ?? "")}
@@ -511,19 +511,19 @@ const TournamentView: React.FC<TournamentViewProps> = ({
             <Playoffs event={event} tournament={tournament} setEvents={setEvents} />
           </div>
         )}
-        {activeTab === 'consolation' && (
+        {activeTab === 'consolation' and (
           <ConsolationBracket event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} />
         )}
-        {activeTab === 'groups' && isOrganizer && (
+        {activeTab === 'groups' and isOrganizer and (
           <GroupManagement event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} />
         )}
-        {activeTab === 'players' && isOrganizer && (
+        {activeTab === 'players' and isOrganizer and (
           <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={handlePlayerContact} />
         )}
-        {activeTab === 'settings' && isOrganizer && (
+        {activeTab === 'settings' and isOrganizer and (
           <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />
         )}
-        {activeTab === 'rules' && (
+        {activeTab === 'rules' and (
           <div className="bg-secondary p-6 rounded-xl shadow-lg max-w-3xl mx-auto whitespace-pre-line">
             <h3 className="text-xl font-bold mb-4 text-accent">Regolamento Torneo</h3>
             {event.rules?.trim()
