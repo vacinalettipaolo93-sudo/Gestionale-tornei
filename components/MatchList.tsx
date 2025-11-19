@@ -109,7 +109,25 @@ const MatchCard: React.FC<{
 
       <div className="flex items-center justify-center gap-4 pt-4 mt-4 border-t border-tertiary/50">
         {match.status === 'pending' && canBook && (
-          <button onClick={() => onBookMatch(match)} className="bg-accent/80 hover:bg-accent text-primary font-bold py-2 px-3 rounded-lg text-sm transition-colors">
+          <button
+            onClick={(e) => {
+              // stop propagation to avoid parent handlers interfering
+              e.stopPropagation();
+              // diagnostic log to confirm click arrives here
+              console.log('[MatchList] Prenota button clicked, match id=', match?.id, ' onBookMatch present?', typeof onBookMatch === 'function');
+              if (typeof onBookMatch === 'function') {
+                try {
+                  onBookMatch(match);
+                } catch (err) {
+                  console.error('[MatchList] Error calling onBookMatch:', err);
+                }
+              } else {
+                console.warn('[MatchList] onBookMatch is not a function. Cannot book match.');
+              }
+            }}
+            className="bg-accent/80 hover:bg-accent text-primary font-bold py-2 px-3 rounded-lg text-sm transition-colors"
+            type="button"
+          >
             Prenota
           </button>
         )}
