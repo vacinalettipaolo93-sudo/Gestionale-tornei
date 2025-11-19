@@ -444,7 +444,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
               isOrganizer={isOrganizer}
               loggedInPlayerId={loggedInPlayerId}
               onPlayerContact={handlePlayerContact}
-              onRescheduleMatch={onRescheduleMatch}
+              onRescheduleMatch={handleRescheduleMatch}
               onCancelBooking={handleCancelBooking}
               onDeleteResult={match => setDeletingMatch(match)}
               viewingOwnGroup={selectedGroup.playerIds.includes(loggedInPlayerId ?? "")}
@@ -490,6 +490,73 @@ const TournamentView: React.FC<TournamentViewProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Booking modal */}
+            {bookingMatch && (
+              <div className={modalBg}>
+                <div className={modalBox}>
+                  <h4 className="mb-4 font-bold text-lg text-accent">Prenota Partita</h4>
+                  <div className="flex flex-col gap-4">
+                    <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
+                    <select
+                      value={selectedSlotId}
+                      onChange={e => { setSelectedSlotId(e.target.value); setBookingError(""); }}
+                      className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                    >
+                      <option value="">Seleziona uno slot</option>
+                      {getAvailableSlots().map(slot => (
+                        <option key={slot.id} value={slot.id}>
+                          {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {bookingError && <div className="text-red-500 font-bold">{bookingError}</div>}
+                    <div className="flex gap-2 justify-end pt-3">
+                      <button
+                        onClick={() => { setBookingMatch(null); setBookingError(""); setSelectedSlotId(""); }}
+                        className="bg-tertiary px-4 py-2 rounded"
+                      >
+                        Annulla
+                      </button>
+                      <button
+                        disabled={!selectedSlotId}
+                        onClick={async () => { if (bookingMatch) { await saveMatchBooking(bookingMatch); } }}
+                        className="bg-highlight text-white px-4 py-2 rounded"
+                      >
+                        Prenota
+                      </button>
+                    </div>
+                    {getAvailableSlots().length === 0 &&
+                      <p className="text-text-secondary mt-2">Nessuno slot disponibile, chiedi all'organizzatore di aggiungere slot!</p>
+                    }
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Delete result confirmation modal */}
+            {deletingMatch && (
+              <div className={modalBg}>
+                <div className={modalBox}>
+                  <h4 className="mb-4 font-bold text-lg text-red-600">Elimina risultato partita</h4>
+                  <p className="mb-6 font-bold text-white">Sei sicuro di voler eliminare il risultato della partita tra&nbsp;
+                    <strong>{event.players.find(p => p.id === deletingMatch.player1Id)?.name}</strong> e&nbsp;
+                    <strong>{event.players.find(p => p.id === deletingMatch.player2Id)?.name}</strong>?
+                  </p>
+                  <div className="flex gap-2 justify-end pt-3">
+                    <button
+                      onClick={() => setDeletingMatch(null)}
+                      className="bg-tertiary px-4 py-2 rounded"
+                    >Annulla</button>
+                    <button
+                      onClick={async () => { await deleteMatchResult(deletingMatch); setDeletingMatch(null);}}
+                      className="bg-red-600 text-white px-4 py-2 rounded"
+                    >Elimina</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ... rest of modals unchanged ... */}
           </div>
         )}
@@ -511,19 +578,19 @@ const TournamentView: React.FC<TournamentViewProps> = ({
             <Playoffs event={event} tournament={tournament} setEvents={setEvents} />
           </div>
         )}
-        {activeTab === 'consolation' and (
+        {activeTab === 'consolation' && (
           <ConsolationBracket event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} />
         )}
-        {activeTab === 'groups' and isOrganizer and (
+        {activeTab === 'groups' && isOrganizer && (
           <GroupManagement event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} />
         )}
-        {activeTab === 'players' and isOrganizer and (
+        {activeTab === 'players' && isOrganizer && (
           <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={handlePlayerContact} />
         )}
-        {activeTab === 'settings' and isOrganizer and (
+        {activeTab === 'settings' && isOrganizer && (
           <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />
         )}
-        {activeTab === 'rules' and (
+        {activeTab === 'rules' && (
           <div className="bg-secondary p-6 rounded-xl shadow-lg max-w-3xl mx-auto whitespace-pre-line">
             <h3 className="text-xl font-bold mb-4 text-accent">Regolamento Torneo</h3>
             {event.rules?.trim()
