@@ -18,7 +18,6 @@ interface TournamentViewProps {
   setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
   isOrganizer: boolean;
   loggedInPlayerId?: string;
-  // NEW optional props to open with a specific tab / group
   initialActiveTab?: 'standings' | 'matches' | 'participants' | 'playoffs' | 'consolation' | 'groups' | 'settings' | 'rules' | 'players';
   initialSelectedGroupId?: string;
   onPlayerContact?: (player: Player | { phone?: string }) => void;
@@ -30,22 +29,16 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 }) => {
   const userGroup = tournament.groups.find(g => g.playerIds.includes(loggedInPlayerId ?? ""));
   const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>(
-    // priority: explicit initialSelectedGroupId -> user's group -> first group
     initialSelectedGroupId ?? (userGroup ? userGroup.id : tournament.groups[0]?.id)
   );
   const selectedGroup = tournament.groups.find(g => g.id === selectedGroupId);
 
   const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'participants' | 'playoffs' | 'consolation' | 'groups' | 'settings' | 'rules' | 'players'>(
-    // initialize from initialActiveTab if provided, otherwise default to 'standings'
     initialActiveTab ?? 'standings'
   );
 
-  // If parent changes initialActiveTab or initialSelectedGroupId (e.g. user clicked quick button),
-  // sync them into local state.
   useEffect(() => {
-    if (initialActiveTab) {
-      setActiveTab(initialActiveTab);
-    }
+    if (initialActiveTab) setActiveTab(initialActiveTab);
   }, [initialActiveTab]);
 
   useEffect(() => {
@@ -54,8 +47,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     }
   }, [initialSelectedGroupId, tournament.groups]);
 
-  // Keep previous logic intact (modals, booking, editing, etc.)
-  // Stati modali
+  // modali / stati
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   const [score1, setScore1] = useState<string>("");
   const [score2, setScore2] = useState<string>("");
@@ -70,7 +62,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
   const [bookingError, setBookingError] = useState<string>("");
 
-  // Calcolo slot già prenotati in tutti i tornei
   function getAllBookedSlotIds(): string[] {
     return event.tournaments.flatMap(tournament =>
       tournament.groups
@@ -100,7 +91,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     }
   };
 
-  // INSERISCI/MODIFICA RISULTATO
+  // risultato (modifica / salva)
   const handleEditResult = (match: Match) => {
     setEditingMatch(match);
     setScore1(match.score1 !== null ? String(match.score1) : "");
@@ -110,65 +101,30 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     if (!selectedGroup) return;
     const updatedMatch = { ...match, score1: Number(score1), score2: Number(score2), status: "completed" };
     const updatedGroups = tournament.groups.map(g =>
-      g.id === selectedGroup.id
-        ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) }
-        : g
+      g.id === selectedGroup.id ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) } : g
     );
-    const updatedTournaments = event.tournaments.map(t =>
-      t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-    );
-    setEvents(prevEvents =>
-      prevEvents.map(e =>
-        e.id === event.id
-          ? {
-            ...e,
-            tournaments: updatedTournaments
-          }
-          : e
-      )
-    );
-    await updateDoc(doc(db, "events", event.id), {
-      tournaments: updatedTournaments
-    });
+    const updatedTournaments = event.tournaments.map(t => t.id === tournament.id ? { ...t, groups: updatedGroups } : t);
+    setEvents(prev => prev.map(e => e.id === event.id ? { ...e, tournaments: updatedTournaments } : e));
+    await updateDoc(doc(db, "events", event.id), { tournaments: updatedTournaments });
     setEditingMatch(null);
     setScore1("");
     setScore2("");
   }
 
-  // ELIMINA RISULTATO
+  // elimina risultato
   async function deleteMatchResult(match: Match) {
     if (!selectedGroup) return;
-    const updatedMatch: Match = {
-      ...match,
-      score1: null,
-      score2: null,
-      status: "pending",
-    };
+    const updatedMatch: Match = { ...match, score1: null, score2: null, status: "pending" };
     const updatedGroups = tournament.groups.map(g =>
-      g.id === selectedGroup.id
-        ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) }
-        : g
+      g.id === selectedGroup.id ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) } : g
     );
-    const updatedTournaments = event.tournaments.map(t =>
-      t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-    );
-    setEvents(prevEvents =>
-      prevEvents.map(e =>
-        e.id === event.id
-          ? {
-            ...e,
-            tournaments: updatedTournaments
-          }
-          : e
-      )
-    );
-    await updateDoc(doc(db, "events", event.id), {
-      tournaments: updatedTournaments
-    });
+    const updatedTournaments = event.tournaments.map(t => t.id === tournament.id ? { ...t, groups: updatedGroups } : t);
+    setEvents(prev => prev.map(e => e.id === event.id ? { ...e, tournaments: updatedTournaments } : e));
+    await updateDoc(doc(db, "events", event.id), { tournaments: updatedTournaments });
     setDeletingMatch(null);
   }
 
-  // PRENOTA
+  // booking
   const handleBookMatch = (match: Match) => {
     setBookingMatch(match);
     setSelectedSlotId("");
@@ -204,34 +160,18 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       location: timeSlot.location ?? "",
       field: timeSlot.field ?? (timeSlot.location ?? ""),
     };
-
     const updatedGroups = tournament.groups.map(g =>
-      g.id === selectedGroup.id
-        ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) }
-        : g
+      g.id === selectedGroup.id ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) } : g
     );
-    const updatedTournaments = event.tournaments.map(t =>
-      t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-    );
-    setEvents(prevEvents =>
-      prevEvents.map(e =>
-        e.id === event.id
-          ? {
-            ...e,
-            tournaments: updatedTournaments
-          }
-          : e
-      )
-    );
-    await updateDoc(doc(db, "events", event.id), {
-      tournaments: updatedTournaments
-    });
+    const updatedTournaments = event.tournaments.map(t => t.id === tournament.id ? { ...t, groups: updatedGroups } : t);
+    setEvents(prev => prev.map(e => e.id === event.id ? { ...e, tournaments: updatedTournaments } : e));
+    await updateDoc(doc(db, "events", event.id), { tournaments: updatedTournaments });
     setBookingMatch(null);
     setSelectedSlotId("");
     setBookingError("");
   }
 
-  // MODIFICA PRENOTAZIONE
+  // reschedule
   const handleRescheduleMatch = (match: Match) => {
     setReschedulingMatch(match);
     setRescheduleSlotId("");
@@ -240,7 +180,10 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     if (!selectedGroup) return;
     const globalSlots = Array.isArray(event.globalTimeSlots) ? event.globalTimeSlots : [];
     const allBookedSlotIds = getAllBookedSlotIds();
-    if (!rescheduleSlotId) return;
+    if (!rescheduleSlotId) {
+      setBookingError("Seleziona uno slot orario.");
+      return;
+    }
     if (allBookedSlotIds.includes(rescheduleSlotId)) {
       setBookingError("Slot già prenotato da un'altra partita.");
       return;
@@ -255,63 +198,26 @@ const TournamentView: React.FC<TournamentViewProps> = ({
       field: timeSlot?.field ?? (timeSlot?.location ?? ""),
     };
     const updatedGroups = tournament.groups.map(g =>
-      g.id === selectedGroup.id
-        ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) }
-        : g
+      g.id === selectedGroup.id ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) } : g
     );
-    const updatedTournaments = event.tournaments.map(t =>
-      t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-    );
-    setEvents(prevEvents =>
-      prevEvents.map(e =>
-        e.id === event.id
-          ? {
-            ...e,
-            tournaments: updatedTournaments
-          }
-          : e
-      )
-    );
-    await updateDoc(doc(db, "events", event.id), {
-      tournaments: updatedTournaments
-    });
+    const updatedTournaments = event.tournaments.map(t => t.id === tournament.id ? { ...t, groups: updatedGroups } : t);
+    setEvents(prev => prev.map(e => e.id === event.id ? { ...e, tournaments: updatedTournaments } : e));
+    await updateDoc(doc(db, "events", event.id), { tournaments: updatedTournaments });
     setReschedulingMatch(null);
     setRescheduleSlotId("");
     setBookingError("");
   }
 
-  // ANNULLA PRENOTAZIONE – Modificata qui (LOGICA SICURA!)
+  // cancel booking
   async function handleCancelBooking(match: Match) {
     if (!selectedGroup) return;
-    const updatedMatch: Match = {
-      ...match,
-      status: "pending",
-      scheduledTime: null,
-      slotId: null,
-      location: "",
-      field: "",
-    };
+    const updatedMatch: Match = { ...match, status: "pending", scheduledTime: null, slotId: null, location: "", field: "" };
     const updatedGroups = tournament.groups.map(g =>
-      g.id === selectedGroup.id
-        ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) }
-        : g
+      g.id === selectedGroup.id ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) } : g
     );
-    const updatedTournaments = event.tournaments.map(t =>
-      t.id === tournament.id ? { ...t, groups: updatedGroups } : t
-    );
-    setEvents(prevEvents =>
-      prevEvents.map(e =>
-        e.id === event.id
-          ? {
-            ...e,
-            tournaments: updatedTournaments
-          }
-          : e
-      )
-    );
-    await updateDoc(doc(db, "events", event.id), {
-      tournaments: updatedTournaments
-    });
+    const updatedTournaments = event.tournaments.map(t => t.id === tournament.id ? { ...t, groups: updatedGroups } : t);
+    setEvents(prev => prev.map(e => e.id === event.id ? { ...e, tournaments: updatedTournaments } : e));
+    await updateDoc(doc(db, "events", event.id), { tournaments: updatedTournaments });
   }
 
   const modalBg = "fixed inset-0 bg-black/70 flex items-center justify-center z-50";
@@ -391,7 +297,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
         >
           Regolamento
         </button>
-        {isOrganizer && ( 
+        {isOrganizer && (
           <button onClick={() => setActiveTab('settings')}
             className={`px-4 py-2 rounded-full ${activeTab === 'settings'
               ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
@@ -534,6 +440,49 @@ const TournamentView: React.FC<TournamentViewProps> = ({
               </div>
             )}
 
+            {/* Reschedule modal */}
+            {reschedulingMatch && (
+              <div className={modalBg}>
+                <div className={modalBox}>
+                  <h4 className="mb-4 font-bold text-lg text-accent">Modifica Prenotazione</h4>
+                  <div className="flex flex-col gap-4">
+                    <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
+                    <select
+                      value={rescheduleSlotId}
+                      onChange={e => { setRescheduleSlotId(e.target.value); setBookingError(""); }}
+                      className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                    >
+                      <option value="">Seleziona uno slot</option>
+                      {getAvailableSlots().map(slot => (
+                        <option key={slot.id} value={slot.id}>
+                          {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {bookingError && <div className="text-red-500 font-bold">{bookingError}</div>}
+                    <div className="flex gap-2 justify-end pt-3">
+                      <button
+                        onClick={() => { setReschedulingMatch(null); setRescheduleSlotId(""); setBookingError(""); }}
+                        className="bg-tertiary px-4 py-2 rounded"
+                      >
+                        Annulla
+                      </button>
+                      <button
+                        disabled={!rescheduleSlotId}
+                        onClick={async () => { if (reschedulingMatch) { await saveRescheduleMatch(reschedulingMatch); } }}
+                        className="bg-highlight text-white px-4 py-2 rounded"
+                      >
+                        Salva
+                      </button>
+                    </div>
+                    {getAvailableSlots().length === 0 &&
+                      <p className="text-text-secondary mt-2">Nessuno slot disponibile, chiedi all'organizzatore di aggiungere slot!</p>
+                    }
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Delete result confirmation modal */}
             {deletingMatch && (
               <div className={modalBg}>
@@ -549,7 +498,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
                       className="bg-tertiary px-4 py-2 rounded"
                     >Annulla</button>
                     <button
-                      onClick={async () => { await deleteMatchResult(deletingMatch); setDeletingMatch(null);}}
+                      onClick={async () => { if (deletingMatch) { await deleteMatchResult(deletingMatch); } }}
                       className="bg-red-600 text-white px-4 py-2 rounded"
                     >Elimina</button>
                   </div>
