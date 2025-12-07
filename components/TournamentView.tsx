@@ -344,7 +344,15 @@ const TournamentView: React.FC<TournamentViewProps> = ({
           <div>
             <h3 className="text-xl font-bold mb-3 text-accent">{selectedGroup.name}</h3>
             <div>
-              {selectedGroup.matches.map(match => (
+              {[
+                ...selectedGroup.matches
+                  .filter(m => m.status === 'scheduled' && m.slotId && m.scheduledTime)
+                  .sort((a, b) => new Date(a.scheduledTime!).getTime() - new Date(b.scheduledTime!).getTime()),
+                ...selectedGroup.matches
+                  .filter(m => m.status === 'pending'),
+                ...selectedGroup.matches
+                  .filter(m => m.score1 != null && m.score2 != null)
+              ].map(match => (
                 <div key={match.id} className="relative mb-8">
                   <MatchList
                     group={{ ...selectedGroup, matches: [match] }}
@@ -401,6 +409,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
                       </div>
                     </div>
                   )}
+
                   {/* Modale: Prenota */}
                   {bookingMatch && bookingMatch.id === match.id && (
                     <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
@@ -439,6 +448,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
                       </div>
                     </div>
                   )}
+
                   {/* Modale: Modifica prenotazione */}
                   {reschedulingMatch && reschedulingMatch.id === match.id && (
                     <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
@@ -477,6 +487,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
                       </div>
                     </div>
                   )}
+
                   {/* Modale: Elimina risultato */}
                   {deletingMatch && deletingMatch.id === match.id && (
                     <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
@@ -505,7 +516,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
           </div>
         )}
 
-        {/* ...tutti gli altri tab restano invariati... */}
         {activeTab === 'participants' && !isOrganizer && (
           <ParticipantsTab event={event} tournament={tournament} loggedInPlayerId={loggedInPlayerId} />
         )}
