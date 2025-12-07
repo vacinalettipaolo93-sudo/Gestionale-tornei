@@ -10,7 +10,7 @@ import { TrashIcon, PlusIcon } from './Icons';
 interface EventViewProps {
   event: Event;
   // accept optional initial tab and groupId when invoked
-  onSelectTournament: (tournament: Tournament, initialTab?: 'standings' | 'matches' | 'participants' | 'playoffs' | 'consolation' | 'groups' | 'settings' | 'rules' | 'players', initialGroupId?: string) => void;
+  onSelectTournament: (tournament: Tournament, initialTab?: 'standings' | 'matches' | 'slot' | 'participants' | 'playoffs' | 'consolation' | 'groups' | 'settings' | 'rules' | 'players', initialGroupId?: string) => void;
   setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
   isOrganizer: boolean;
   loggedInPlayerId?: string;
@@ -266,7 +266,7 @@ const EventView: React.FC<EventViewProps> = ({
                   <div className="flex justify-between items-start">
                     <h3 className={titleClass}>{tournament.name}</h3>
                     {isOrganizer && (
-                      <div className="flex items_center gap-2">
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={() => openEditTournament(tournament)}
                           className="text-text-secondary/80 hover:text-text-primary p-1 rounded"
@@ -296,31 +296,39 @@ const EventView: React.FC<EventViewProps> = ({
                     </button>
                     <button
                       onClick={() => onSelectTournament(tournament, 'standings', myGroupId)}
-                      className="text-sm bg-tertiary/60 text_white px-3 py-1 rounded hover:bg-tertiary transition"
+                      className="text-sm bg-tertiary/60 text-white px-3 py-1 rounded hover:bg-tertiary transition"
                       title="Apri il tab Classifica"
                     >
                       Classifica
                     </button>
                     <button
                       onClick={() => onSelectTournament(tournament, 'participants')}
-                      className="text-sm bg-tertiary/60 text_white px-3 py-1 rounded hover:bg-tertiary transition"
+                      className="text-sm bg-tertiary/60 text-white px-3 py-1 rounded hover:bg-tertiary transition"
                       title="Apri il tab Partecipanti"
                     >
                       Partecipanti
                     </button>
                     <button
                       onClick={() => onSelectTournament(tournament, 'playoffs')}
-                      className="text-sm bg-tertiary/60 text_white px-3 py-1 rounded hover:bg-tertiary transition"
+                      className="text-sm bg-tertiary/60 text-white px-3 py-1 rounded hover:bg-tertiary transition"
                       title="Apri il tab Playoff"
                     >
                       Playoff
                     </button>
                     <button
                       onClick={() => onSelectTournament(tournament, 'consolation')}
-                      className="text-sm bg-tertiary/60 text_white px-3 py-1 rounded hover_bg-tertiary transition"
+                      className="text-sm bg-tertiary/60 text-white px-3 py-1 rounded hover:bg-tertiary transition"
                       title="Apri il tab Consolazione"
                     >
                       Consolazione
+                    </button>
+                    {/* AGGIUNTA: tasto Slot Disponibili per aprire direttamente il nuovo tab nel TournamentView */}
+                    <button
+                      onClick={() => onSelectTournament(tournament, 'slot', myGroupId)}
+                      className="text-sm bg-tertiary/60 text-white px-3 py-1 rounded hover:bg-tertiary transition"
+                      title="Apri il tab Slot Disponibili"
+                    >
+                      Slot Disponibili
                     </button>
                   </div>
 
@@ -359,7 +367,7 @@ const EventView: React.FC<EventViewProps> = ({
         </div>
       </div>
 
-      {/* AGGIUNTA: Slot disponibili (visibili a tutti) subito dopo i tornei */}
+      {/* Sezione slot disponibili globale (lettura per tutti) */}
       <AvailableSlotsList event={event} />
 
       {/* SLOT ORARI GLOBALI (solo organizzatore) */}
@@ -413,7 +421,7 @@ const EventView: React.FC<EventViewProps> = ({
             </div>
           ) : (
             <div className="bg-primary p-4 rounded-lg border border-tertiary mt-2 whitespace-pre-line">
-              {event.rules?.trim() ? event.rules : <span className="text-text_secondary">Nessun regolamento inserito dall'organizzatore.</span>}
+              {event.rules?.trim() ? event.rules : <span className="text-text-secondary">Nessun regolamento inserito dall'organizzatore.</span>}
             </div>
           )}
         </div>
@@ -433,7 +441,7 @@ const EventView: React.FC<EventViewProps> = ({
 
       {/* ----------------- MODAL: AGGIUNGI TORNEO ----------------- */}
       {isAddTournamentOpen && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify_center z-50">
           <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
             <h4 className="text-lg font-bold mb-4 text-accent">Aggiungi Nuovo Torneo</h4>
             <form onSubmit={handleAddTournament} className="space-y-4">
