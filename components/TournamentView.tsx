@@ -226,7 +226,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     <div>
       {/* Tabs menu */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {/* ...tab rendering invariato... */}
         <button onClick={() => setActiveTab('standings')}
           className={`px-4 py-2 rounded-full ${activeTab === 'standings'
             ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
@@ -243,7 +242,6 @@ const TournamentView: React.FC<TournamentViewProps> = ({
         >
           Partite
         </button>
-        {/* ...altri tab invariati... */}
         {!isOrganizer && (
           <button onClick={() => setActiveTab('participants')}
             className={`px-4 py-2 rounded-full ${activeTab === 'participants'
@@ -343,175 +341,498 @@ const TournamentView: React.FC<TournamentViewProps> = ({
         {activeTab === 'matches' && selectedGroup && (
           <div>
             <h3 className="text-xl font-bold mb-3 text-accent">{selectedGroup.name}</h3>
+
+            {/* PARTITE PROGRAMMATE */}
+            <h4 className="text-lg font-semibold mb-3 text-accent">Partite Programmate</h4>
             <div>
-              {[
-                ...selectedGroup.matches
+              {selectedGroup.matches.filter(m => m.status === 'scheduled' && m.slotId && m.scheduledTime).length > 0 ? (
+                selectedGroup.matches
                   .filter(m => m.status === 'scheduled' && m.slotId && m.scheduledTime)
-                  .sort((a, b) => new Date(a.scheduledTime!).getTime() - new Date(b.scheduledTime!).getTime()),
-                ...selectedGroup.matches
-                  .filter(m => m.status === 'pending'),
-                ...selectedGroup.matches
+                  .sort((a, b) => new Date(a.scheduledTime!).getTime() - new Date(b.scheduledTime!).getTime())
+                  .map(match => (
+                    <div key={match.id} className="relative mb-8">
+                      <MatchList
+                        group={{ ...selectedGroup, matches: [match] }}
+                        players={event.players}
+                        onEditResult={handleEditResult}
+                        onBookMatch={handleBookMatch}
+                        isOrganizer={isOrganizer}
+                        loggedInPlayerId={loggedInPlayerId}
+                        onPlayerContact={handlePlayerContact}
+                        onRescheduleMatch={handleRescheduleMatch}
+                        onCancelBooking={handleCancelBooking}
+                        onDeleteResult={match => setDeletingMatch(match)}
+                        viewingOwnGroup={selectedGroup.playerIds.includes(loggedInPlayerId ?? "")}
+                      />
+                      {/* MODALI */}
+                      {editingMatch && editingMatch.id === match.id && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
+                          <div className={modalBox}>
+                            <h4 className="mb-4 font-bold text-lg text-accent">Modifica Risultato</h4>
+                            <div className="flex flex-col gap-4">
+                              <div className="flex flex-col">
+                                <label className="font-bold mb-1 text-white">Risultato per {event.players.find(p => p.id === editingMatch.player1Id)?.name}</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={score1}
+                                  onChange={e => setScore1(e.target.value)}
+                                  className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                                />
+                              </div>
+                              <div className="flex flex-col">
+                                <label className="font-bold mb-1 text-white">Risultato per {event.players.find(p => p.id === editingMatch.player2Id)?.name}</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={score2}
+                                  onChange={e => setScore2(e.target.value)}
+                                  className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                                />
+                              </div>
+                              <div className="flex gap-2 justify-end pt-3">
+                                <button
+                                  onClick={() => setEditingMatch(null)}
+                                  className="bg-tertiary px-4 py-2 rounded"
+                                >Annulla</button>
+                                <button
+                                  disabled={score1 === "" || score2 === ""}
+                                  onClick={async () => { await saveMatchResult(editingMatch); setEditingMatch(null); }}
+                                  className="bg-highlight text-white px-4 py-2 rounded"
+                                >Salva</button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {bookingMatch && bookingMatch.id === match.id && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
+                          <div className={modalBox}>
+                            <h4 className="mb-4 font-bold text-lg text-accent">Prenota Partita</h4>
+                            <div className="flex flex-col gap-4">
+                              <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
+                              <select
+                                value={selectedSlotId}
+                                onChange={e => { setSelectedSlotId(e.target.value); setBookingError(""); }}
+                                className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                              >
+                                <option value="">Seleziona uno slot</option>
+                                {getAvailableSlots().map(slot => (
+                                  <option key={slot.id} value={slot.id}>
+                                    {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              {bookingError && <div className="text-red-500 font-bold">{bookingError}</div>}
+                              <div className="flex gap-2 justify-end pt-3">
+                                <button
+                                  onClick={() => { setBookingMatch(null); setBookingError(""); setSelectedSlotId(""); }}
+                                  className="bg-tertiary px-4 py-2 rounded"
+                                >Annulla</button>
+                                <button
+                                  disabled={!selectedSlotId}
+                                  onClick={async () => { if (bookingMatch) { await saveMatchBooking(bookingMatch); } }}
+                                  className="bg-highlight text-white px-4 py-2 rounded"
+                                >Prenota</button>
+                              </div>
+                              {getAvailableSlots().length === 0 &&
+                                <p className="text-text-secondary mt-2">Nessuno slot disponibile, chiedi all'organizzatore di aggiungere slot!</p>
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {reschedulingMatch && reschedulingMatch.id === match.id && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
+                          <div className={modalBox}>
+                            <h4 className="mb-4 font-bold text-lg text-accent">Modifica Prenotazione</h4>
+                            <div className="flex flex-col gap-4">
+                              <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
+                              <select
+                                value={rescheduleSlotId}
+                                onChange={e => { setRescheduleSlotId(e.target.value); setBookingError(""); }}
+                                className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                              >
+                                <option value="">Seleziona uno slot</option>
+                                {getAvailableSlots().map(slot => (
+                                  <option key={slot.id} value={slot.id}>
+                                    {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              {bookingError && <div className="text-red-500 font-bold">{bookingError}</div>}
+                              <div className="flex gap-2 justify-end pt-3">
+                                <button
+                                  onClick={() => { setReschedulingMatch(null); setRescheduleSlotId(""); setBookingError(""); }}
+                                  className="bg-tertiary px-4 py-2 rounded"
+                                >Annulla</button>
+                                <button
+                                  disabled={!rescheduleSlotId}
+                                  onClick={async () => { if (reschedulingMatch) { await saveRescheduleMatch(reschedulingMatch); } }}
+                                  className="bg-highlight text-white px-4 py-2 rounded"
+                                >Salva</button>
+                              </div>
+                              {getAvailableSlots().length === 0 &&
+                                <p className="text-text-secondary mt-2">Nessuno slot disponibile, chiedi all'organizzatore di aggiungere slot!</p>
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {deletingMatch && deletingMatch.id === match.id && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
+                          <div className={modalBox}>
+                            <h4 className="mb-4 font-bold text-lg text-red-600">Elimina risultato partita</h4>
+                            <p className="mb-6 font-bold text-white">Sei sicuro di voler eliminare il risultato della partita tra&nbsp;
+                              <strong>{event.players.find(p => p.id === deletingMatch.player1Id)?.name}</strong> e&nbsp;
+                              <strong>{event.players.find(p => p.id === deletingMatch.player2Id)?.name}</strong>?
+                            </p>
+                            <div className="flex gap-2 justify-end pt-3">
+                              <button
+                                onClick={() => setDeletingMatch(null)}
+                                className="bg-tertiary px-4 py-2 rounded"
+                              >Annulla</button>
+                              <button
+                                onClick={async () => { if (deletingMatch) { await deleteMatchResult(deletingMatch); } }}
+                                className="bg-red-600 text-white px-4 py-2 rounded"
+                              >Elimina</button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+              ) : (
+                <p className="text-text-secondary text-center py-4">Nessuna partita programmata.</p>
+              )}
+            </div>
+
+            {/* PARTITE DA FARE */}
+            <h4 className="text-lg font-semibold mb-3 text-accent">Partite da Fare</h4>
+            <div>
+              {selectedGroup.matches.filter(m => m.status === 'pending').length > 0 ? (
+                selectedGroup.matches
+                  .filter(m => m.status === 'pending')
+                  .map(match => (
+                    <div key={match.id} className="relative mb-8">
+                      <MatchList
+                        group={{ ...selectedGroup, matches: [match] }}
+                        players={event.players}
+                        onEditResult={handleEditResult}
+                        onBookMatch={handleBookMatch}
+                        isOrganizer={isOrganizer}
+                        loggedInPlayerId={loggedInPlayerId}
+                        onPlayerContact={handlePlayerContact}
+                        onRescheduleMatch={handleRescheduleMatch}
+                        onCancelBooking={handleCancelBooking}
+                        onDeleteResult={match => setDeletingMatch(match)}
+                        viewingOwnGroup={selectedGroup.playerIds.includes(loggedInPlayerId ?? "")}
+                      />
+                      {/* MODALI -- copia/identico ai precedenti */}
+                      {editingMatch && editingMatch.id === match.id && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
+                          <div className={modalBox}>
+                            <h4 className="mb-4 font-bold text-lg text-accent">Modifica Risultato</h4>
+                            <div className="flex flex-col gap-4">
+                              <div className="flex flex-col">
+                                <label className="font-bold mb-1 text-white">Risultato per {event.players.find(p => p.id === editingMatch.player1Id)?.name}</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={score1}
+                                  onChange={e => setScore1(e.target.value)}
+                                  className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                                />
+                              </div>
+                              <div className="flex flex-col">
+                                <label className="font-bold mb-1 text-white">Risultato per {event.players.find(p => p.id === editingMatch.player2Id)?.name}</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={score2}
+                                  onChange={e => setScore2(e.target.value)}
+                                  className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                                />
+                              </div>
+                              <div className="flex gap-2 justify-end pt-3">
+                                <button
+                                  onClick={() => setEditingMatch(null)}
+                                  className="bg-tertiary px-4 py-2 rounded"
+                                >Annulla</button>
+                                <button
+                                  disabled={score1 === "" || score2 === ""}
+                                  onClick={async () => { await saveMatchResult(editingMatch); setEditingMatch(null); }}
+                                  className="bg-highlight text-white px-4 py-2 rounded"
+                                >Salva</button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {bookingMatch && bookingMatch.id === match.id && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
+                          <div className={modalBox}>
+                            <h4 className="mb-4 font-bold text-lg text-accent">Prenota Partita</h4>
+                            <div className="flex flex-col gap-4">
+                              <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
+                              <select
+                                value={selectedSlotId}
+                                onChange={e => { setSelectedSlotId(e.target.value); setBookingError(""); }}
+                                className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                              >
+                                <option value="">Seleziona uno slot</option>
+                                {getAvailableSlots().map(slot => (
+                                  <option key={slot.id} value={slot.id}>
+                                    {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              {bookingError && <div className="text-red-500 font-bold">{bookingError}</div>}
+                              <div className="flex gap-2 justify-end pt-3">
+                                <button
+                                  onClick={() => { setBookingMatch(null); setBookingError(""); setSelectedSlotId(""); }}
+                                  className="bg-tertiary px-4 py-2 rounded"
+                                >Annulla</button>
+                                <button
+                                  disabled={!selectedSlotId}
+                                  onClick={async () => { if (bookingMatch) { await saveMatchBooking(bookingMatch); } }}
+                                  className="bg-highlight text-white px-4 py-2 rounded"
+                                >Prenota</button>
+                              </div>
+                              {getAvailableSlots().length === 0 &&
+                                <p className="text-text-secondary mt-2">Nessuno slot disponibile, chiedi all'organizzatore di aggiungere slot!</p>
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {reschedulingMatch && reschedulingMatch.id === match.id && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
+                          <div className={modalBox}>
+                            <h4 className="mb-4 font-bold text-lg text-accent">Modifica Prenotazione</h4>
+                            <div className="flex flex-col gap-4">
+                              <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
+                              <select
+                                value={rescheduleSlotId}
+                                onChange={e => { setRescheduleSlotId(e.target.value); setBookingError(""); }}
+                                className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                              >
+                                <option value="">Seleziona uno slot</option>
+                                {getAvailableSlots().map(slot => (
+                                  <option key={slot.id} value={slot.id}>
+                                    {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              {bookingError && <div className="text-red-500 font-bold">{bookingError}</div>}
+                              <div className="flex gap-2 justify-end pt-3">
+                                <button
+                                  onClick={() => { setReschedulingMatch(null); setRescheduleSlotId(""); setBookingError(""); }}
+                                  className="bg-tertiary px-4 py-2 rounded"
+                                >Annulla</button>
+                                <button
+                                  disabled={!rescheduleSlotId}
+                                  onClick={async () => { if (reschedulingMatch) { await saveRescheduleMatch(reschedulingMatch); } }}
+                                  className="bg-highlight text-white px-4 py-2 rounded"
+                                >Salva</button>
+                              </div>
+                              {getAvailableSlots().length === 0 &&
+                                <p className="text-text-secondary mt-2">Nessuno slot disponibile, chiedi all'organizzatore di aggiungere slot!</p>
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {deletingMatch && deletingMatch.id === match.id && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
+                          <div className={modalBox}>
+                            <h4 className="mb-4 font-bold text-lg text-red-600">Elimina risultato partita</h4>
+                            <p className="mb-6 font-bold text-white">Sei sicuro di voler eliminare il risultato della partita tra&nbsp;
+                              <strong>{event.players.find(p => p.id === deletingMatch.player1Id)?.name}</strong> e&nbsp;
+                              <strong>{event.players.find(p => p.id === deletingMatch.player2Id)?.name}</strong>?
+                            </p>
+                            <div className="flex gap-2 justify-end pt-3">
+                              <button
+                                onClick={() => setDeletingMatch(null)}
+                                className="bg-tertiary px-4 py-2 rounded"
+                              >Annulla</button>
+                              <button
+                                onClick={async () => { if (deletingMatch) { await deleteMatchResult(deletingMatch); } }}
+                                className="bg-red-600 text-white px-4 py-2 rounded"
+                              >Elimina</button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+              ) : (
+                <p className="text-text-secondary text-center py-4">Nessuna partita da disputare.</p>
+              )}
+            </div>
+
+            {/* PARTITE COMPLETATE */}
+            <h4 className="text-lg font-semibold mb-3 text-accent">Partite Completate</h4>
+            <div>
+              {selectedGroup.matches.filter(m => m.score1 != null && m.score2 != null).length > 0 ? (
+                selectedGroup.matches
                   .filter(m => m.score1 != null && m.score2 != null)
-              ].map(match => (
-                <div key={match.id} className="relative mb-8">
-                  <MatchList
-                    group={{ ...selectedGroup, matches: [match] }}
-                    players={event.players}
-                    onEditResult={handleEditResult}
-                    onBookMatch={handleBookMatch}
-                    isOrganizer={isOrganizer}
-                    loggedInPlayerId={loggedInPlayerId}
-                    onPlayerContact={handlePlayerContact}
-                    onRescheduleMatch={handleRescheduleMatch}
-                    onCancelBooking={handleCancelBooking}
-                    onDeleteResult={match => setDeletingMatch(match)}
-                    viewingOwnGroup={selectedGroup.playerIds.includes(loggedInPlayerId ?? "")}
-                  />
-
-                  {/* Modale: Modifica Risultato */}
-                  {editingMatch && editingMatch.id === match.id && (
-                    <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
-                      <div className={modalBox}>
-                        <h4 className="mb-4 font-bold text-lg text-accent">Modifica Risultato</h4>
-                        <div className="flex flex-col gap-4">
-                          <div className="flex flex-col">
-                            <label className="font-bold mb-1 text-white">Risultato per {event.players.find(p => p.id === editingMatch.player1Id)?.name}</label>
-                            <input
-                              type="number"
-                              min="0"
-                              value={score1}
-                              onChange={e => setScore1(e.target.value)}
-                              className="border px-3 py-2 rounded font-bold text-white bg-primary"
-                            />
-                          </div>
-                          <div className="flex flex-col">
-                            <label className="font-bold mb-1 text-white">Risultato per {event.players.find(p => p.id === editingMatch.player2Id)?.name}</label>
-                            <input
-                              type="number"
-                              min="0"
-                              value={score2}
-                              onChange={e => setScore2(e.target.value)}
-                              className="border px-3 py-2 rounded font-bold text-white bg-primary"
-                            />
-                          </div>
-                          <div className="flex gap-2 justify-end pt-3">
-                            <button
-                              onClick={() => setEditingMatch(null)}
-                              className="bg-tertiary px-4 py-2 rounded"
-                            >Annulla</button>
-                            <button
-                              disabled={score1 === "" || score2 === ""}
-                              onClick={async () => { await saveMatchResult(editingMatch); setEditingMatch(null); }}
-                              className="bg-highlight text-white px-4 py-2 rounded"
-                            >Salva</button>
+                  .map(match => (
+                    <div key={match.id} className="relative mb-8">
+                      <MatchList
+                        group={{ ...selectedGroup, matches: [match] }}
+                        players={event.players}
+                        onEditResult={handleEditResult}
+                        onBookMatch={handleBookMatch}
+                        isOrganizer={isOrganizer}
+                        loggedInPlayerId={loggedInPlayerId}
+                        onPlayerContact={handlePlayerContact}
+                        onRescheduleMatch={handleRescheduleMatch}
+                        onCancelBooking={handleCancelBooking}
+                        onDeleteResult={match => setDeletingMatch(match)}
+                        viewingOwnGroup={selectedGroup.playerIds.includes(loggedInPlayerId ?? "")}
+                      />
+                      {/* MODALI -- copia/identico ai precedenti */}
+                      {editingMatch && editingMatch.id === match.id && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
+                          <div className={modalBox}>
+                            <h4 className="mb-4 font-bold text-lg text-accent">Modifica Risultato</h4>
+                            <div className="flex flex-col gap-4">
+                              <div className="flex flex-col">
+                                <label className="font-bold mb-1 text-white">Risultato per {event.players.find(p => p.id === editingMatch.player1Id)?.name}</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={score1}
+                                  onChange={e => setScore1(e.target.value)}
+                                  className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                                />
+                              </div>
+                              <div className="flex flex-col">
+                                <label className="font-bold mb-1 text-white">Risultato per {event.players.find(p => p.id === editingMatch.player2Id)?.name}</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={score2}
+                                  onChange={e => setScore2(e.target.value)}
+                                  className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                                />
+                              </div>
+                              <div className="flex gap-2 justify-end pt-3">
+                                <button
+                                  onClick={() => setEditingMatch(null)}
+                                  className="bg-tertiary px-4 py-2 rounded"
+                                >Annulla</button>
+                                <button
+                                  disabled={score1 === "" || score2 === ""}
+                                  onClick={async () => { await saveMatchResult(editingMatch); setEditingMatch(null); }}
+                                  className="bg-highlight text-white px-4 py-2 rounded"
+                                >Salva</button>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Modale: Prenota */}
-                  {bookingMatch && bookingMatch.id === match.id && (
-                    <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
-                      <div className={modalBox}>
-                        <h4 className="mb-4 font-bold text-lg text-accent">Prenota Partita</h4>
-                        <div className="flex flex-col gap-4">
-                          <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
-                          <select
-                            value={selectedSlotId}
-                            onChange={e => { setSelectedSlotId(e.target.value); setBookingError(""); }}
-                            className="border px-3 py-2 rounded font-bold text-white bg-primary"
-                          >
-                            <option value="">Seleziona uno slot</option>
-                            {getAvailableSlots().map(slot => (
-                              <option key={slot.id} value={slot.id}>
-                                {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
-                              </option>
-                            ))}
-                          </select>
-                          {bookingError && <div className="text-red-500 font-bold">{bookingError}</div>}
-                          <div className="flex gap-2 justify-end pt-3">
-                            <button
-                              onClick={() => { setBookingMatch(null); setBookingError(""); setSelectedSlotId(""); }}
-                              className="bg-tertiary px-4 py-2 rounded"
-                            >Annulla</button>
-                            <button
-                              disabled={!selectedSlotId}
-                              onClick={async () => { if (bookingMatch) { await saveMatchBooking(bookingMatch); } }}
-                              className="bg-highlight text-white px-4 py-2 rounded"
-                            >Prenota</button>
+                      )}
+                      {bookingMatch && bookingMatch.id === match.id && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
+                          <div className={modalBox}>
+                            <h4 className="mb-4 font-bold text-lg text-accent">Prenota Partita</h4>
+                            <div className="flex flex-col gap-4">
+                              <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
+                              <select
+                                value={selectedSlotId}
+                                onChange={e => { setSelectedSlotId(e.target.value); setBookingError(""); }}
+                                className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                              >
+                                <option value="">Seleziona uno slot</option>
+                                {getAvailableSlots().map(slot => (
+                                  <option key={slot.id} value={slot.id}>
+                                    {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              {bookingError && <div className="text-red-500 font-bold">{bookingError}</div>}
+                              <div className="flex gap-2 justify-end pt-3">
+                                <button
+                                  onClick={() => { setBookingMatch(null); setBookingError(""); setSelectedSlotId(""); }}
+                                  className="bg-tertiary px-4 py-2 rounded"
+                                >Annulla</button>
+                                <button
+                                  disabled={!selectedSlotId}
+                                  onClick={async () => { if (bookingMatch) { await saveMatchBooking(bookingMatch); } }}
+                                  className="bg-highlight text-white px-4 py-2 rounded"
+                                >Prenota</button>
+                              </div>
+                              {getAvailableSlots().length === 0 &&
+                                <p className="text-text-secondary mt-2">Nessuno slot disponibile, chiedi all'organizzatore di aggiungere slot!</p>
+                              }
+                            </div>
                           </div>
-                          {getAvailableSlots().length === 0 &&
-                            <p className="text-text-secondary mt-2">Nessuno slot disponibile, chiedi all'organizzatore di aggiungere slot!</p>
-                          }
                         </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Modale: Modifica prenotazione */}
-                  {reschedulingMatch && reschedulingMatch.id === match.id && (
-                    <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
-                      <div className={modalBox}>
-                        <h4 className="mb-4 font-bold text-lg text-accent">Modifica Prenotazione</h4>
-                        <div className="flex flex-col gap-4">
-                          <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
-                          <select
-                            value={rescheduleSlotId}
-                            onChange={e => { setRescheduleSlotId(e.target.value); setBookingError(""); }}
-                            className="border px-3 py-2 rounded font-bold text-white bg-primary"
-                          >
-                            <option value="">Seleziona uno slot</option>
-                            {getAvailableSlots().map(slot => (
-                              <option key={slot.id} value={slot.id}>
-                                {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
-                              </option>
-                            ))}
-                          </select>
-                          {bookingError && <div className="text-red-500 font-bold">{bookingError}</div>}
-                          <div className="flex gap-2 justify-end pt-3">
-                            <button
-                              onClick={() => { setReschedulingMatch(null); setRescheduleSlotId(""); setBookingError(""); }}
-                              className="bg-tertiary px-4 py-2 rounded"
-                            >Annulla</button>
-                            <button
-                              disabled={!rescheduleSlotId}
-                              onClick={async () => { if (reschedulingMatch) { await saveRescheduleMatch(reschedulingMatch); } }}
-                              className="bg-highlight text-white px-4 py-2 rounded"
-                            >Salva</button>
+                      )}
+                      {reschedulingMatch && reschedulingMatch.id === match.id && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
+                          <div className={modalBox}>
+                            <h4 className="mb-4 font-bold text-lg text-accent">Modifica Prenotazione</h4>
+                            <div className="flex flex-col gap-4">
+                              <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
+                              <select
+                                value={rescheduleSlotId}
+                                onChange={e => { setRescheduleSlotId(e.target.value); setBookingError(""); }}
+                                className="border px-3 py-2 rounded font-bold text-white bg-primary"
+                              >
+                                <option value="">Seleziona uno slot</option>
+                                {getAvailableSlots().map(slot => (
+                                  <option key={slot.id} value={slot.id}>
+                                    {new Date(slot.start).toLocaleString("it-IT")}{slot.location ? ` - ${slot.location}` : ""}{slot.field ? ` - ${slot.field}` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              {bookingError && <div className="text-red-500 font-bold">{bookingError}</div>}
+                              <div className="flex gap-2 justify-end pt-3">
+                                <button
+                                  onClick={() => { setReschedulingMatch(null); setRescheduleSlotId(""); setBookingError(""); }}
+                                  className="bg-tertiary px-4 py-2 rounded"
+                                >Annulla</button>
+                                <button
+                                  disabled={!rescheduleSlotId}
+                                  onClick={async () => { if (reschedulingMatch) { await saveRescheduleMatch(reschedulingMatch); } }}
+                                  className="bg-highlight text-white px-4 py-2 rounded"
+                                >Salva</button>
+                              </div>
+                              {getAvailableSlots().length === 0 &&
+                                <p className="text-text-secondary mt-2">Nessuno slot disponibile, chiedi all'organizzatore di aggiungere slot!</p>
+                              }
+                            </div>
                           </div>
-                          {getAvailableSlots().length === 0 &&
-                            <p className="text-text-secondary mt-2">Nessuno slot disponibile, chiedi all'organizzatore di aggiungere slot!</p>
-                          }
                         </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Modale: Elimina risultato */}
-                  {deletingMatch && deletingMatch.id === match.id && (
-                    <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
-                      <div className={modalBox}>
-                        <h4 className="mb-4 font-bold text-lg text-red-600">Elimina risultato partita</h4>
-                        <p className="mb-6 font-bold text-white">Sei sicuro di voler eliminare il risultato della partita tra&nbsp;
-                          <strong>{event.players.find(p => p.id === deletingMatch.player1Id)?.name}</strong> e&nbsp;
-                          <strong>{event.players.find(p => p.id === deletingMatch.player2Id)?.name}</strong>?
-                        </p>
-                        <div className="flex gap-2 justify-end pt-3">
-                          <button
-                            onClick={() => setDeletingMatch(null)}
-                            className="bg-tertiary px-4 py-2 rounded"
-                          >Annulla</button>
-                          <button
-                            onClick={async () => { if (deletingMatch) { await deleteMatchResult(deletingMatch); } }}
-                            className="bg-red-600 text-white px-4 py-2 rounded"
-                          >Elimina</button>
+                      )}
+                      {deletingMatch && deletingMatch.id === match.id && (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full z-50 mt-2">
+                          <div className={modalBox}>
+                            <h4 className="mb-4 font-bold text-lg text-red-600">Elimina risultato partita</h4>
+                            <p className="mb-6 font-bold text-white">Sei sicuro di voler eliminare il risultato della partita tra&nbsp;
+                              <strong>{event.players.find(p => p.id === deletingMatch.player1Id)?.name}</strong> e&nbsp;
+                              <strong>{event.players.find(p => p.id === deletingMatch.player2Id)?.name}</strong>?
+                            </p>
+                            <div className="flex gap-2 justify-end pt-3">
+                              <button
+                                onClick={() => setDeletingMatch(null)}
+                                className="bg-tertiary px-4 py-2 rounded"
+                              >Annulla</button>
+                              <button
+                                onClick={async () => { if (deletingMatch) { await deleteMatchResult(deletingMatch); } }}
+                                className="bg-red-600 text-white px-4 py-2 rounded"
+                              >Elimina</button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              ))}
+                  ))
+              ) : (
+                <p className="text-text-secondary text-center py-4">Nessuna partita completata.</p>
+              )}
             </div>
           </div>
         )}
