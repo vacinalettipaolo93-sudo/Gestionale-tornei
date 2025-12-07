@@ -11,6 +11,7 @@ import PlayerManagement from './PlayerManagement';
 import PlayoffBracketBuilder from './PlayoffBracketBuilder';
 import { db } from "../firebase";
 import { updateDoc, doc } from "firebase/firestore";
+import AvailableSlotsList from './AvailableSlotsList';
 
 interface TournamentViewProps {
   event: Event;
@@ -250,6 +251,12 @@ const TournamentView: React.FC<TournamentViewProps> = ({
               : 'bg-transparent text-accent'
             }`}
           >
+          Slot Disponibili
+        </button>
+        <button onClick={() => setActiveTab('slot')}
+          className={...}
+          }`}
+        >
             Partecipanti
           </button>
         )}
