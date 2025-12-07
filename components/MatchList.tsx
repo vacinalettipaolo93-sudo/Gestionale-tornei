@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { type Group, type Match, type Player } from '../types';
 
 // AGGIUNTA: funzione ICS per calendario
@@ -7,7 +7,6 @@ function downloadIcsForMatch({eventName, opponentName, date, startTime}: {eventN
   const dtEnd = (() => {
     const [h, m] = startTime.split(':').map(Number);
     const dateObj = new Date(`${date}T${startTime}`);
-    // durata = 1 ora
     dateObj.setHours(h + 1);
     return pad(dateObj.getHours()) + pad(dateObj.getMinutes());
   })();
@@ -155,19 +154,8 @@ const MatchCard: React.FC<{
         {match.status === 'pending' && canBook && (
           <button
             onClick={(e) => {
-              // prevent parent handlers from interfering
               e.stopPropagation();
-              // diagnostic log to confirm click arrives here
-              console.log('[MatchList] Prenota button clicked, match id=', match?.id, ' onBookMatch present?', typeof onBookMatch === 'function');
-              if (typeof onBookMatch === 'function') {
-                try {
-                  onBookMatch(match);
-                } catch (err) {
-                  console.error('[MatchList] Error calling onBookMatch:', err);
-                }
-              } else {
-                console.warn('[MatchList] onBookMatch is not a function. Cannot book match.');
-              }
+              onBookMatch(match);
             }}
             className="bg-accent/80 hover:bg-accent text-primary font-bold py-2 px-3 rounded-lg text-sm transition-colors"
             type="button"
@@ -207,12 +195,7 @@ const MatchCard: React.FC<{
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              console.log('[MatchList] Elimina risultato clicked, match id=', match?.id, ' onDeleteResult present?', typeof onDeleteResult === 'function');
-              try {
-                onDeleteResult(match);
-              } catch (err) {
-                console.error('[MatchList] Error calling onDeleteResult:', err);
-              }
+              onDeleteResult(match);
             }}
             className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors"
           >
@@ -270,7 +253,7 @@ const MatchList: React.FC<MatchListProps> = ({
   onDeleteResult,
   viewingOwnGroup = false
 }) => {
-  const [filter, setFilter] = useState<'all' | 'my'>(isOrganizer ? 'all' : 'my');
+  const [filter, setFilter] = React.useState<'all' | 'my'>(isOrganizer ? 'all' : 'my');
 
   if (!group) {
     return <p className="text-center text-text-secondary py-6">Seleziona un girone per vedere le partite.</p>;
@@ -287,7 +270,6 @@ const MatchList: React.FC<MatchListProps> = ({
 
   const pendingMatches = filteredMatches('pending');
   
-  // --- FILTRI MIGLIORATI: "partite programmate" mostra solo se slotId + scheduledTime è valorizzato ---
   const scheduledMatches = group.matches.filter(m =>
     m.status === 'scheduled' &&
     m.slotId &&
@@ -297,7 +279,6 @@ const MatchList: React.FC<MatchListProps> = ({
   
   const completedMatches = group.matches.filter(m => m.score1 != null && m.score2 != null);
 
-  // Optional: ordina le liste per scheduledTime quando disponibile (stabile)
   const sortByTime = (arr: Match[]) =>
     arr.slice().sort((a, b) => {
       const ta = a.scheduledTime ? new Date(a.scheduledTime).getTime() : 0;
@@ -327,8 +308,6 @@ const MatchList: React.FC<MatchListProps> = ({
           </div>
         </div>
       )}
-
-      {/* ORDINE RICHIESTO: 1) Programmate, 2) Da Fare, 3) Completate */}
 
       <div>
         <h4 className="text-lg font-semibold mb-3 text-accent">Partite Programmate</h4>
