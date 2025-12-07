@@ -6,7 +6,6 @@ interface Props {
   tournament?: Tournament;
   userId?: string;
   onClickBook?: (slot: TimeSlot) => void; // solo nel torneo, permette la prenotazione
-  // matchesPending solo per mostrare per quali partite posso prenotare (tab torneo)
   matchesPending?: Match[];
 }
 
