@@ -9,6 +9,7 @@ import Playoffs from './Playoffs';
 import ConsolationBracket from './ConsolationBracket';
 import PlayerManagement from './PlayerManagement';
 import PlayoffBracketBuilder from './PlayoffBracketBuilder';
+import AvailableSlotsList from './AvailableSlotsList';
 import { db } from "../firebase";
 import { updateDoc, doc } from "firebase/firestore";
 
@@ -18,7 +19,7 @@ interface TournamentViewProps {
   setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
   isOrganizer: boolean;
   loggedInPlayerId?: string;
-  initialActiveTab?: 'standings' | 'matches' | 'participants' | 'playoffs' | 'consolation' | 'groups' | 'settings' | 'rules' | 'players';
+  initialActiveTab?: 'standings' | 'matches' | 'slot' | 'participants' | 'playoffs' | 'consolation' | 'groups' | 'settings' | 'rules' | 'players';
   initialSelectedGroupId?: string;
   onPlayerContact?: (player: Player | { phone?: string }) => void;
 }
@@ -33,12 +34,12 @@ const TournamentView: React.FC<TournamentViewProps> = ({
   );
   const selectedGroup = tournament.groups.find(g => g.id === selectedGroupId);
 
-  const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'participants' | 'playoffs' | 'consolation' | 'groups' | 'settings' | 'rules' | 'players'>(
-    initialActiveTab ?? 'standings'
+  const [activeTab, setActiveTab] = useState<'standings' | 'matches' | 'slot' | 'participants' | 'playoffs' | 'consolation' | 'groups' | 'settings' | 'rules' | 'players'>(
+    (initialActiveTab ?? 'standings') as any
   );
 
   useEffect(() => {
-    if (initialActiveTab) setActiveTab(initialActiveTab);
+    if (initialActiveTab) setActiveTab(initialActiveTab as any);
   }, [initialActiveTab]);
 
   useEffect(() => {
@@ -61,6 +62,40 @@ const TournamentView: React.FC<TournamentViewProps> = ({
   const [deletingMatch, setDeletingMatch] = useState<Match | null>(null);
 
   const [bookingError, setBookingError] = useState<string>("");
+
+  // AGGIUNTA: prenotazione dal tab Slot Disponibili
+  const [slotToBook, setSlotToBook] = useState<null | TimeSlot>(null);
+  const myPendingMatches = selectedGroup
+    ? selectedGroup.matches.filter(m =>
+        m.status === "pending" &&
+        (m.player1Id === loggedInPlayerId || m.player2Id === loggedInPlayerId))
+    : [];
+  const handleClickBookSlot = (slot: TimeSlot) => setSlotToBook(slot);
+
+  const handleConfirmBookSlot = async (matchId: string) => {
+    const match = selectedGroup?.matches.find(m => m.id === matchId);
+    if (!match || !slotToBook) return;
+    setBookingError("");
+    const updatedMatch: Match = {
+      ...match,
+      status: "scheduled",
+      scheduledTime: new Date(slotToBook.start).toISOString(),
+      location: slotToBook.location ?? "",
+      field: slotToBook.field ?? (slotToBook.location ?? ""),
+      slotId: slotToBook.id
+    };
+    const updatedGroups = tournament.groups.map(g =>
+      g.id === selectedGroup?.id
+        ? { ...g, matches: g.matches.map(m => m.id === match.id ? updatedMatch : m) }
+        : g
+    );
+    const updatedTournaments = event.tournaments.map(t =>
+      t.id === tournament.id ? { ...t, groups: updatedGroups } : t
+    );
+    setEvents(prev => prev.map(e => e.id === event.id ? { ...e, tournaments: updatedTournaments } : e));
+    await updateDoc(doc(db, "events", event.id), { tournaments: updatedTournaments });
+    setSlotToBook(null);
+  };
 
   function getAllBookedSlotIds(): string[] {
     return event.tournaments.flatMap(tournament =>
@@ -242,6 +277,15 @@ const TournamentView: React.FC<TournamentViewProps> = ({
           }`}
         >
           Partite
+        </button>
+        {/* AGGIUNTA: Tab Slot Disponibili */}
+        <button onClick={() => setActiveTab('slot')}
+          className={`px-4 py-2 rounded-full ${activeTab === 'slot'
+            ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
+            : 'bg-transparent text-accent'
+          }`}
+        >
+          Slot Disponibili
         </button>
         {!isOrganizer && (
           <button onClick={() => setActiveTab('participants')}
@@ -505,9 +549,45 @@ const TournamentView: React.FC<TournamentViewProps> = ({
                 </div>
               </div>
             )}
-
-            {/* ... rest of modals unchanged ... */}
           </div>
+        )}
+
+        {/* Tab Slot Disponibili */}
+        {activeTab === 'slot' && (
+          <>
+            <AvailableSlotsList
+              event={event}
+              tournament={tournament}
+              userId={loggedInPlayerId}
+              onClickBook={handleClickBookSlot}
+              matchesPending={myPendingMatches}
+            />
+            {slotToBook && myPendingMatches.length > 0 && (
+              <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+                <div className="bg-secondary p-6 rounded-xl shadow-lg w-full max-w-sm border border-tertiary">
+                  <h4 className="mb-4 font-bold text-lg text-accent">Prenota Slot</h4>
+                  <div className="mb-2">
+                    <span className="font-semibold">Slot:</span> {new Date(slotToBook.start).toLocaleString('it-IT')}
+                    {slotToBook.location && <> – <span className="font-semibold">{slotToBook.location}</span></>}
+                    {slotToBook.field && <> – <span>{slotToBook.field}</span></>}
+                  </div>
+                  <div className="flex flex-col gap-4 mt-2">
+                    <span className="font-semibold mb-2">Scegli partita da prenotare:</span>
+                    {myPendingMatches.map(m => (
+                      <button
+                        key={m.id}
+                        className="w-full bg-accent hover:bg-highlight text-white rounded-lg px-4 py-2 mb-2 font-bold"
+                        onClick={() => handleConfirmBookSlot(m.id)}
+                      >
+                        {event.players.find(p => p.id === m.player1Id)?.name} vs {event.players.find(p => p.id === m.player2Id)?.name}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setSlotToBook(null)} className="mt-4 bg-tertiary px-4 py-2 rounded">Annulla</button>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {activeTab === 'participants' && !isOrganizer && (
