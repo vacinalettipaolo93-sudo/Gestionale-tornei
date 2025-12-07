@@ -1,6 +1,37 @@
 import React, { useState } from 'react';
 import { type Group, type Match, type Player } from '../types';
 
+// AGGIUNTA: funzione ICS per calendario
+function downloadIcsForMatch({eventName, opponentName, date, startTime}: {eventName: string, opponentName: string, date: string, startTime: string}) {
+  const pad = (num: number) => String(num).padStart(2, '0');
+  const dtEnd = (() => {
+    const [h, m] = startTime.split(':').map(Number);
+    const dateObj = new Date(`${date}T${startTime}`);
+    // durata = 1 ora
+    dateObj.setHours(h + 1);
+    return pad(dateObj.getHours()) + pad(dateObj.getMinutes());
+  })();
+  const icsContent = [
+    `BEGIN:VCALENDAR`,
+    `VERSION:2.0`,
+    `BEGIN:VEVENT`,
+    `SUMMARY:${eventName} - Partita vs ${opponentName}`,
+    `DTSTART:${date.replace(/-/g, '')}T${startTime.replace(':','')}00`,
+    `DTEND:${date.replace(/-/g, '')}T${dtEnd}00`,
+    `DESCRIPTION:Partita torneo contro ${opponentName}`,
+    `END:VEVENT`,
+    `END:VCALENDAR`
+  ].join('\r\n');
+  const blob = new Blob([icsContent], { type: 'text/calendar' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${eventName}_vs_${opponentName}.ics`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+// /FINE AGGIUNTA funzione ICS
+
 interface MatchListProps {
   group?: Group | null;
   players?: Player[];
@@ -63,6 +94,11 @@ const MatchCard: React.FC<{
         field: match.field || match.location || ""
       }
     : null;
+
+  // AGGIUNTA: estrazione date/time raw per export e whatsapp
+  const rawDate = match.scheduledTime ? match.scheduledTime.slice(0,10) : '';
+  const rawTime = match.scheduledTime ? match.scheduledTime.slice(11,16) : '';
+  // /FINE AGGIUNTA
 
   return (
     <div className="bg-secondary p-4 rounded-lg shadow">
@@ -184,6 +220,39 @@ const MatchCard: React.FC<{
           </button>
         )}
       </div>
+      {/* AGGIUNTA: bottoni calendario e whatsapp disponibili solo per match prenotato e visibile a uno dei due giocatori */}
+      {match.status === 'scheduled' && isParticipant && scheduledInfo && (
+        <div className="flex gap-2 mt-4 justify-center">
+          <button
+            className="bg-highlight text-white text-xs px-3 py-1 rounded hover:bg-accent"
+            onClick={() => {
+              const eventName = 'Partita torneo';
+              const myName = loggedInPlayerId === player1.id ? player1.name : player2.name;
+              const opponentName = loggedInPlayerId === player1.id ? player2.name : player1.name;
+              downloadIcsForMatch({eventName, opponentName, date: rawDate, startTime: rawTime});
+            }}
+          >
+            Aggiungi al Calendario
+          </button>
+          <a
+            className="bg-green-600 text-white text-xs px-3 py-1 rounded hover:bg-green-700"
+            target="_blank"
+            rel="noopener noreferrer"
+            href={(() => {
+              const myName = loggedInPlayerId === player1.id ? player1.name : player2.name;
+              const opponentName = loggedInPlayerId === player1.id ? player2.name : player1.name;
+              const opponentPhone = loggedInPlayerId === player1.id ? player2.phone : player1.phone;
+              const msg = encodeURIComponent(
+                `Ciao ${opponentName},\nti ricordo che hai una partita prenotata al torneo contro di me (${myName}) il ${rawDate} alle ${rawTime}.`
+              );
+              return `https://wa.me/${opponentPhone?.replace(/[^0-9]/g, '')}?text=${msg}`;
+            })()}
+          >
+            Invia promemoria WhatsApp
+          </a>
+        </div>
+      )}
+      {/* /FINE AGGIUNTA */}
     </div>
   );
 };
