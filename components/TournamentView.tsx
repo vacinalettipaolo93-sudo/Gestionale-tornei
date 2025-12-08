@@ -426,7 +426,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
   // End anchoring logic
   // --- original modal classes kept but wrapper changed to allow anchored positioning ---
-  const modalBackdropBase = "fixed inset-0 bg-black/70 z-50";
+  const modalBackdrop = "fixed inset-0 bg-black/70 z-50";
   const modalBox = "bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary";
 
   return (
@@ -572,7 +572,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
             />
 
             {editingMatch && (
-              <div className={modalBackdropBase} role="dialog" aria-modal="true">
+              <div className={modalBackdrop} role="dialog" aria-modal="true">
                 <div
                   ref={editingModalRef}
                   style={editingModalStyle}
@@ -618,7 +618,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
             {/* Booking modal */}
             {bookingMatch && (
-              <div className={modalBackdropBase} role="dialog" aria-modal="true">
+              <div className={modalBackdrop} role="dialog" aria-modal="true">
                 <div
                   ref={bookingModalRef}
                   style={bookingModalStyle}
@@ -665,7 +665,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
             {/* Reschedule modal */}
             {reschedulingMatch && (
-              <div className={modalBackdropBase} role="dialog" aria-modal="true">
+              <div className={modalBackdrop} role="dialog" aria-modal="true">
                 <div
                   ref={rescheduleModalRef}
                   style={rescheduleModalStyle}
@@ -712,7 +712,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
             {/* Delete result confirmation modal */}
             {deletingMatch && (
-              <div className={modalBackdropBase} role="dialog" aria-modal="true">
+              <div className={modalBackdrop} role="dialog" aria-modal="true">
                 <div
                   ref={deletingModalRef}
                   style={deletingModalStyle}
@@ -750,7 +750,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
               matchesPending={myPendingMatches}
             />
             {slotToBook && myPendingMatches.length > 0 && (
-              <div className="fixed inset-0 bg-black/60 z-50" role="dialog" aria-modal="true">
+              <div className={modalBackdrop} role="dialog" aria-modal="true">
                 <div
                   ref={slotToBookModalRef}
                   style={slotToBookModalStyle}
@@ -801,13 +801,13 @@ const TournamentView: React.FC<TournamentViewProps> = ({
         {activeTab === 'consolation' && (
           <ConsolationBracket event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} />
         )}
-        {activeTab === 'groups' and isOrganizer && (
+        {activeTab === 'groups' && isOrganizer && (
           <GroupManagement event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} />
         )}
-        {activeTab === 'players' and isOrganizer && (
+        {activeTab === 'players' && isOrganizer && (
           <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={handlePlayerContact} />
         )}
-        {activeTab === 'settings' and isOrganizer && (
+        {activeTab === 'settings' && isOrganizer && (
           <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />
         )}
         {activeTab === 'rules' && (
