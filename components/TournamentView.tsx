@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { type Event, type Tournament, type Match, type TimeSlot, type Player } from '../types';
 import StandingsTable from './StandingsTable';
 import MatchList from './MatchList';
@@ -12,6 +12,7 @@ import PlayoffBracketBuilder from './PlayoffBracketBuilder';
 import AvailableSlotsList from './AvailableSlotsList';
 import { db } from "../firebase";
 import { updateDoc, doc } from "firebase/firestore";
+import { calculateAnchoredModalPosition, isMobileViewport, type ModalPosition } from '../utils/modalPosition';
 
 interface TournamentViewProps {
   event: Event;
@@ -62,6 +63,47 @@ const TournamentView: React.FC<TournamentViewProps> = ({
   const [deletingMatch, setDeletingMatch] = useState<Match | null>(null);
 
   const [bookingError, setBookingError] = useState<string>("");
+
+  // Track trigger elements for anchored modal positioning
+  const lastClickedElementRef = useRef<HTMLElement | null>(null);
+  const [modalPosition, setModalPosition] = useState<ModalPosition | null>(null);
+
+  // Listen for clicks on modal trigger buttons to capture their position
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Check if the clicked element is a button that triggers a modal
+      const button = target.closest('button');
+      if (button) {
+        const buttonText = button.textContent?.toLowerCase() || '';
+        // Only capture clicks on specific modal trigger buttons
+        if (
+          buttonText.includes('prenota') ||
+          buttonText.includes('risultato') ||
+          buttonText.includes('modifica pren') ||
+          buttonText.includes('annulla pren') ||
+          buttonText.includes('elimina risultato')
+        ) {
+          lastClickedElementRef.current = button;
+        }
+      }
+    };
+
+    document.addEventListener('click', handleClick, true);
+    return () => document.removeEventListener('click', handleClick, true);
+  }, []);
+
+  // Calculate modal position when a modal opens
+  const calculateModalPosition = () => {
+    if (isMobileViewport()) {
+      // On mobile, fall back to centered positioning
+      setModalPosition(null);
+      return;
+    }
+
+    const position = calculateAnchoredModalPosition(lastClickedElementRef.current);
+    setModalPosition(position);
+  };
 
   // AGGIUNTA: prenotazione dal tab Slot Disponibili
   const [slotToBook, setSlotToBook] = useState<null | TimeSlot>(null);
@@ -128,6 +170,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
   // risultato (modifica / salva)
   const handleEditResult = (match: Match) => {
+    calculateModalPosition();
     setEditingMatch(match);
     setScore1(match.score1 !== null ? String(match.score1) : "");
     setScore2(match.score2 !== null ? String(match.score2) : "");
@@ -147,6 +190,11 @@ const TournamentView: React.FC<TournamentViewProps> = ({
   }
 
   // elimina risultato
+  const handleDeleteResult = (match: Match) => {
+    calculateModalPosition();
+    setDeletingMatch(match);
+  };
+
   async function deleteMatchResult(match: Match) {
     if (!selectedGroup) return;
     const updatedMatch: Match = { ...match, score1: null, score2: null, status: "pending" };
@@ -161,6 +209,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
   // booking
   const handleBookMatch = (match: Match) => {
+    calculateModalPosition();
     setBookingMatch(match);
     setSelectedSlotId("");
     setBookingError("");
@@ -208,6 +257,7 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
   // reschedule
   const handleRescheduleMatch = (match: Match) => {
+    calculateModalPosition();
     setReschedulingMatch(match);
     setRescheduleSlotId("");
   };
@@ -255,7 +305,32 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     await updateDoc(doc(db, "events", event.id), { tournaments: updatedTournaments });
   }
 
-  const modalBg = "fixed inset-0 bg-black/70 flex items-center justify-center z-50";
+  // Modal styling: Base styles for modal background and box
+  // Anchored modals use calculated position, centered modals use flexbox centering
+  const getModalBgClass = () => {
+    if (!modalPosition) {
+      // Fallback to centered modal (mobile or when position not calculated)
+      return "fixed inset-0 bg-black/70 flex items-center justify-center z-50";
+    }
+    // Anchored modal - no flexbox centering
+    return "fixed inset-0 bg-black/70 z-50";
+  };
+
+  const getModalBoxStyle = (): React.CSSProperties => {
+    if (!modalPosition) {
+      // Centered modal - no specific positioning needed
+      return {};
+    }
+    // Anchored modal - apply calculated position
+    return {
+      position: 'absolute',
+      top: `${modalPosition.top}px`,
+      left: `${modalPosition.left}px`,
+      maxHeight: modalPosition.maxHeight ? `${modalPosition.maxHeight}px` : undefined,
+      overflowY: 'auto'
+    };
+  };
+
   const modalBox = "bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary";
 
   return (
@@ -396,13 +471,13 @@ const TournamentView: React.FC<TournamentViewProps> = ({
               onPlayerContact={handlePlayerContact}
               onRescheduleMatch={handleRescheduleMatch}
               onCancelBooking={handleCancelBooking}
-              onDeleteResult={match => setDeletingMatch(match)}
+              onDeleteResult={handleDeleteResult}
               viewingOwnGroup={selectedGroup.playerIds.includes(loggedInPlayerId ?? "")}
             />
 
             {editingMatch && (
-              <div className={modalBg}>
-                <div className={modalBox}>
+              <div className={getModalBgClass()}>
+                <div className={modalBox} style={getModalBoxStyle()}>
                   <h4 className="mb-4 font-bold text-lg text-accent">Modifica Risultato</h4>
                   <div className="flex flex-col gap-4">
                     <div className="flex flex-col">
@@ -443,8 +518,8 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
             {/* Booking modal */}
             {bookingMatch && (
-              <div className={modalBg}>
-                <div className={modalBox}>
+              <div className={getModalBgClass()}>
+                <div className={modalBox} style={getModalBoxStyle()}>
                   <h4 className="mb-4 font-bold text-lg text-accent">Prenota Partita</h4>
                   <div className="flex flex-col gap-4">
                     <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
@@ -486,8 +561,8 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
             {/* Reschedule modal */}
             {reschedulingMatch && (
-              <div className={modalBg}>
-                <div className={modalBox}>
+              <div className={getModalBgClass()}>
+                <div className={modalBox} style={getModalBoxStyle()}>
                   <h4 className="mb-4 font-bold text-lg text-accent">Modifica Prenotazione</h4>
                   <div className="flex flex-col gap-4">
                     <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
@@ -529,8 +604,8 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
             {/* Delete result confirmation modal */}
             {deletingMatch && (
-              <div className={modalBg}>
-                <div className={modalBox}>
+              <div className={getModalBgClass()}>
+                <div className={modalBox} style={getModalBoxStyle()}>
                   <h4 className="mb-4 font-bold text-lg text-red-600">Elimina risultato partita</h4>
                   <p className="mb-6 font-bold text-white">Sei sicuro di voler eliminare il risultato della partita tra&nbsp;
                     <strong>{event.players.find(p => p.id === deletingMatch.player1Id)?.name}</strong> e&nbsp;
