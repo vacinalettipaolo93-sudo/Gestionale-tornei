@@ -32,6 +32,46 @@ function downloadIcsForMatch({eventName, opponentName, date, startTime}: {eventN
 }
 // /FINE AGGIUNTA funzione ICS
 
+// AGGIUNTA: Apri Google Calendar con evento precompilato
+function openGoogleCalendarForMatch({ eventName, opponentName, date, startTime, durationMinutes = 60, location = '', description = '' }:
+  { eventName: string; opponentName: string; date: string; startTime: string; durationMinutes?: number; location?: string; description?: string }) {
+
+  // costruiamo una Date locale a partire da date (YYYY-MM-DD) e startTime (HH:MM)
+  const [h, m] = startTime.split(':').map(Number);
+  let startLocal = new Date(`${date}T${startTime}:00`);
+  if (isNaN(startLocal.getTime())) {
+    // fallback: crea manualmente
+    const parts = date.split('-').map(Number);
+    startLocal = new Date(parts[0], parts[1] - 1, parts[2], h, m, 0);
+  }
+
+  const endLocal = new Date(startLocal.getTime() + durationMinutes * 60000);
+
+  // Converti in formato Google (YYYYMMDDTHHMMSSZ) - usare UTC per compatibilità
+  const toGoogleDateTime = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const yyyy = d.getUTCFullYear();
+    const mm = pad(d.getUTCMonth() + 1);
+    const dd = pad(d.getUTCDate());
+    const hh = pad(d.getUTCHours());
+    const min = pad(d.getUTCMinutes());
+    const sec = pad(d.getUTCSeconds());
+    return `${yyyy}${mm}${dd}T${hh}${min}${sec}Z`;
+  };
+
+  const startStr = toGoogleDateTime(startLocal);
+  const endStr = toGoogleDateTime(endLocal);
+
+  const title = encodeURIComponent(`${eventName} - vs ${opponentName}`);
+  const details = encodeURIComponent(description || `Partita vs ${opponentName}`);
+  const loc = encodeURIComponent(location || '');
+
+  const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&location=${loc}&dates=${startStr}/${endStr}`;
+
+  window.open(url, '_blank');
+}
+// /FINE AGGIUNTA Google Calendar
+
 interface MatchListProps {
   group?: Group | null;
   players?: Player[];
@@ -232,8 +272,22 @@ const MatchCard: React.FC<{
               downloadIcsForMatch({eventName, opponentName, date: rawDate, startTime: rawTime});
             }}
           >
-            Aggiungi al Calendario
+            Scarica .ics
           </button>
+
+          <button
+            className="bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700"
+            onClick={() => {
+              const eventName = 'Partita torneo';
+              const opponentName = loggedInPlayerId === player1.id ? player2.name : player1.name;
+              const location = scheduledInfo.field || '';
+              const description = `Partita del torneo contro ${opponentName} - prenotata tramite Tournament Manager.`;
+              openGoogleCalendarForMatch({ eventName, opponentName, date: rawDate, startTime: rawTime, durationMinutes: 60, location, description });
+            }}
+          >
+            Aggiungi a Google Calendar
+          </button>
+
           <a
             className="bg-green-600 text-white text-xs px-3 py-1 rounded hover:bg-green-700"
             target="_blank"
