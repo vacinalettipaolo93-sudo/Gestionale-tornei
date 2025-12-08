@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { type Event, type Tournament, type Match, type TimeSlot, type Player } from '../types';
 import StandingsTable from './StandingsTable';
 import MatchList from './MatchList';
@@ -255,7 +255,178 @@ const TournamentView: React.FC<TournamentViewProps> = ({
     await updateDoc(doc(db, "events", event.id), { tournaments: updatedTournaments });
   }
 
-  const modalBg = "fixed inset-0 bg-black/70 flex items-center justify-center z-50";
+  // --- MODAL ANCHORING LOGIC ADDED BELOW ---
+  // We track refs and inline styles for each modal so they open near the element
+  // that triggered them (fallback to centered modal on small viewports).
+  // NOTE: we only change positioning/markup, NOT the functional logic.
+
+  const editingModalRef = useRef<HTMLDivElement | null>(null);
+  const bookingModalRef = useRef<HTMLDivElement | null>(null);
+  const rescheduleModalRef = useRef<HTMLDivElement | null>(null);
+  const deletingModalRef = useRef<HTMLDivElement | null>(null);
+  const slotToBookModalRef = useRef<HTMLDivElement | null>(null);
+
+  const [editingModalStyle, setEditingModalStyle] = useState<React.CSSProperties | undefined>(undefined);
+  const [bookingModalStyle, setBookingModalStyle] = useState<React.CSSProperties | undefined>(undefined);
+  const [rescheduleModalStyle, setRescheduleModalStyle] = useState<React.CSSProperties | undefined>(undefined);
+  const [deletingModalStyle, setDeletingModalStyle] = useState<React.CSSProperties | undefined>(undefined);
+  const [slotToBookModalStyle, setSlotToBookModalStyle] = useState<React.CSSProperties | undefined>(undefined);
+
+  // compute anchored style given trigger & modal rects
+  function computeAnchorStyle(triggerRect: DOMRect, modalRect: DOMRect) {
+    const margin = 8;
+    const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+    const vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+
+    // mobile fallback: center
+    if (vw <= 480) {
+      return {
+        position: 'fixed' as const,
+        left: '50%',
+        top: '50%',
+        transform: 'translate(-50%, -50%)'
+      };
+    }
+
+    let top = triggerRect.bottom + margin;
+    let left = triggerRect.left;
+
+    // try to place below; if not enough space, place above
+    if (top + modalRect.height > vh - margin) {
+      top = triggerRect.top - modalRect.height - margin;
+    }
+
+    // clamp vertically
+    top = Math.max(margin, Math.min(top, vh - modalRect.height - margin));
+
+    // horizontal overflow correction
+    if (left + modalRect.width > vw - margin) {
+      left = Math.max(margin, vw - modalRect.width - margin);
+    }
+    left = Math.max(margin, left);
+
+    return {
+      position: 'fixed' as const,
+      top: `${Math.round(top)}px`,
+      left: `${Math.round(left)}px`,
+      transform: 'none'
+    };
+  }
+
+  // helper to anchor a given modalRef using document.activeElement as trigger
+  function anchorModal(modalRef: React.RefObject<HTMLDivElement>, setStyle: (s?: React.CSSProperties) => void) {
+    const modalEl = modalRef.current;
+    if (!modalEl) return;
+
+    // wait for modal to be visible & sized
+    requestAnimationFrame(() => {
+      const modalRect = modalEl.getBoundingClientRect();
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || active === document.body || active === document.documentElement) {
+        // no reliable trigger: fallback to center on larger screens as well
+        const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+        if (vw <= 480) {
+          setStyle({
+            position: 'fixed',
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)'
+          });
+        } else {
+          // position near middle-top area (not centered) to avoid full center if no trigger
+          setStyle({
+            position: 'fixed',
+            top: '20%',
+            left: '50%',
+            transform: 'translateX(-50%)'
+          });
+        }
+        return;
+      }
+      const triggerRect = active.getBoundingClientRect();
+      setStyle(computeAnchorStyle(triggerRect, modalRect));
+    });
+  }
+
+  // reposition on open for each modal
+  useEffect(() => {
+    if (editingMatch) {
+      anchorModal(editingModalRef, setEditingModalStyle);
+      const onScroll = () => anchorModal(editingModalRef, setEditingModalStyle);
+      window.addEventListener('scroll', onScroll, true);
+      window.addEventListener('resize', onScroll);
+      return () => {
+        window.removeEventListener('scroll', onScroll, true);
+        window.removeEventListener('resize', onScroll);
+      };
+    } else {
+      setEditingModalStyle(undefined);
+    }
+  }, [editingMatch]);
+
+  useEffect(() => {
+    if (bookingMatch) {
+      anchorModal(bookingModalRef, setBookingModalStyle);
+      const onScroll = () => anchorModal(bookingModalRef, setBookingModalStyle);
+      window.addEventListener('scroll', onScroll, true);
+      window.addEventListener('resize', onScroll);
+      return () => {
+        window.removeEventListener('scroll', onScroll, true);
+        window.removeEventListener('resize', onScroll);
+      };
+    } else {
+      setBookingModalStyle(undefined);
+    }
+  }, [bookingMatch]);
+
+  useEffect(() => {
+    if (reschedulingMatch) {
+      anchorModal(rescheduleModalRef, setRescheduleModalStyle);
+      const onScroll = () => anchorModal(rescheduleModalRef, setRescheduleModalStyle);
+      window.addEventListener('scroll', onScroll, true);
+      window.addEventListener('resize', onScroll);
+      return () => {
+        window.removeEventListener('scroll', onScroll, true);
+        window.removeEventListener('resize', onScroll);
+      };
+    } else {
+      setRescheduleModalStyle(undefined);
+    }
+  }, [reschedulingMatch]);
+
+  useEffect(() => {
+    if (deletingMatch) {
+      anchorModal(deletingModalRef, setDeletingModalStyle);
+      const onScroll = () => anchorModal(deletingModalRef, setDeletingModalStyle);
+      window.addEventListener('scroll', onScroll, true);
+      window.addEventListener('resize', onScroll);
+      return () => {
+        window.removeEventListener('scroll', onScroll, true);
+        window.removeEventListener('resize', onScroll);
+      };
+    } else {
+      setDeletingModalStyle(undefined);
+    }
+  }, [deletingMatch]);
+
+  useEffect(() => {
+    if (slotToBook && myPendingMatches.length > 0) {
+      anchorModal(slotToBookModalRef, setSlotToBookModalStyle);
+      const onScroll = () => anchorModal(slotToBookModalRef, setSlotToBookModalStyle);
+      window.addEventListener('scroll', onScroll, true);
+      window.addEventListener('resize', onScroll);
+      return () => {
+        window.removeEventListener('scroll', onScroll, true);
+        window.removeEventListener('resize', onScroll);
+      };
+    } else {
+      setSlotToBookModalStyle(undefined);
+    }
+  }, [slotToBook, myPendingMatches.length]);
+
+  // End anchoring logic
+  // --- original modal classes kept but wrapper changed to allow anchored positioning ---
+  const modalBackdropBase = "fixed inset-0 bg-black/70 z-50";
   const modalBox = "bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary";
 
   return (
@@ -401,8 +572,12 @@ const TournamentView: React.FC<TournamentViewProps> = ({
             />
 
             {editingMatch && (
-              <div className={modalBg}>
-                <div className={modalBox}>
+              <div className={modalBackdropBase} role="dialog" aria-modal="true">
+                <div
+                  ref={editingModalRef}
+                  style={editingModalStyle}
+                  className={modalBox}
+                >
                   <h4 className="mb-4 font-bold text-lg text-accent">Modifica Risultato</h4>
                   <div className="flex flex-col gap-4">
                     <div className="flex flex-col">
@@ -443,8 +618,12 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
             {/* Booking modal */}
             {bookingMatch && (
-              <div className={modalBg}>
-                <div className={modalBox}>
+              <div className={modalBackdropBase} role="dialog" aria-modal="true">
+                <div
+                  ref={bookingModalRef}
+                  style={bookingModalStyle}
+                  className={modalBox}
+                >
                   <h4 className="mb-4 font-bold text-lg text-accent">Prenota Partita</h4>
                   <div className="flex flex-col gap-4">
                     <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
@@ -486,8 +665,12 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
             {/* Reschedule modal */}
             {reschedulingMatch && (
-              <div className={modalBg}>
-                <div className={modalBox}>
+              <div className={modalBackdropBase} role="dialog" aria-modal="true">
+                <div
+                  ref={rescheduleModalRef}
+                  style={rescheduleModalStyle}
+                  className={modalBox}
+                >
                   <h4 className="mb-4 font-bold text-lg text-accent">Modifica Prenotazione</h4>
                   <div className="flex flex-col gap-4">
                     <label className="font-bold mb-1 text-white">Scegli uno slot libero:</label>
@@ -529,8 +712,12 @@ const TournamentView: React.FC<TournamentViewProps> = ({
 
             {/* Delete result confirmation modal */}
             {deletingMatch && (
-              <div className={modalBg}>
-                <div className={modalBox}>
+              <div className={modalBackdropBase} role="dialog" aria-modal="true">
+                <div
+                  ref={deletingModalRef}
+                  style={deletingModalStyle}
+                  className={modalBox}
+                >
                   <h4 className="mb-4 font-bold text-lg text-red-600">Elimina risultato partita</h4>
                   <p className="mb-6 font-bold text-white">Sei sicuro di voler eliminare il risultato della partita tra&nbsp;
                     <strong>{event.players.find(p => p.id === deletingMatch.player1Id)?.name}</strong> e&nbsp;
@@ -563,8 +750,12 @@ const TournamentView: React.FC<TournamentViewProps> = ({
               matchesPending={myPendingMatches}
             />
             {slotToBook && myPendingMatches.length > 0 && (
-              <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-                <div className="bg-secondary p-6 rounded-xl shadow-lg w-full max-w-sm border border-tertiary">
+              <div className="fixed inset-0 bg-black/60 z-50" role="dialog" aria-modal="true">
+                <div
+                  ref={slotToBookModalRef}
+                  style={slotToBookModalStyle}
+                  className="bg-secondary p-6 rounded-xl shadow-lg w-full max-w-sm border border-tertiary"
+                >
                   <h4 className="mb-4 font-bold text-lg text-accent">Prenota Slot</h4>
                   <div className="mb-2">
                     <span className="font-semibold">Slot:</span> {new Date(slotToBook.start).toLocaleString('it-IT')}
@@ -610,13 +801,13 @@ const TournamentView: React.FC<TournamentViewProps> = ({
         {activeTab === 'consolation' && (
           <ConsolationBracket event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} loggedInPlayerId={loggedInPlayerId} />
         )}
-        {activeTab === 'groups' && isOrganizer && (
+        {activeTab === 'groups' and isOrganizer && (
           <GroupManagement event={event} tournament={tournament} setEvents={setEvents} isOrganizer={isOrganizer} />
         )}
-        {activeTab === 'players' && isOrganizer && (
+        {activeTab === 'players' and isOrganizer && (
           <PlayerManagement event={event} setEvents={setEvents} isOrganizer={isOrganizer} onPlayerContact={handlePlayerContact} />
         )}
-        {activeTab === 'settings' && isOrganizer && (
+        {activeTab === 'settings' and isOrganizer && (
           <TournamentSettings event={event} tournament={tournament} setEvents={setEvents} />
         )}
         {activeTab === 'rules' && (
