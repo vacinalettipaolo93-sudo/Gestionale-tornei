@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { type Event, type Tournament } from '../types';
+import { type Event, type Tournament, type TimeSlot } from '../types';
 import RegolamentoGironiPanel from './RegolamentoGironiPanel';
 import TimeSlots from './TimeSlots';
 import AvailableSlotsList from './AvailableSlotsList';
@@ -17,6 +17,8 @@ interface EventViewProps {
 }
 
 const makeId = () => `${Date.now()}${Math.floor(Math.random() * 10000)}`;
+
+const generateSlotId = () => 'slot_' + Math.random().toString(36).slice(2, 10);
 
 const EventView: React.FC<EventViewProps> = ({
   event,
@@ -40,6 +42,16 @@ const EventView: React.FC<EventViewProps> = ({
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
   const [editTournamentName, setEditTournamentName] = useState<string>('');
   const [editTournamentLoading, setEditTournamentLoading] = useState<boolean>(false);
+
+  // =========================
+  // STATE per gestione slot (home - GLOBAL SLOTS) (visible only all'organizzatore)
+  // =========================
+  const [slotInput, setSlotInput] = useState<{ start: string; location: string; field: string }>({
+    start: "",
+    location: "",
+    field: ""
+  });
+  const [slotError, setSlotError] = useState<string | null>(null);
 
   useEffect(() => {
     setRulesDraft(event.rules ?? "");
@@ -214,6 +226,74 @@ const EventView: React.FC<EventViewProps> = ({
     return ta - tb;
   });
 
+  // ========== FUNZIONI per aggiungere / rimuovere slot GLOBALI (visibili in home per l'organizzatore)
+  const handleAddGlobalSlot = async () => {
+    setSlotError(null);
+    if (!slotInput.start || isNaN(Date.parse(slotInput.start))) {
+      setSlotError("Inserisci una data e ora valida.");
+      return;
+    }
+    if (!slotInput.location?.trim()) {
+      setSlotError("Inserisci il luogo/campo.");
+      return;
+    }
+
+    const slotToAdd: TimeSlot = {
+      id: generateSlotId(),
+      start: slotInput.start,
+      location: slotInput.location.trim(),
+      field: slotInput.field?.trim() ?? ""
+    };
+
+    const updatedGlobalSlots = [...(event.globalTimeSlots ?? []), slotToAdd];
+
+    // update local UI immediately
+    setEvents(prevEvents =>
+      prevEvents.map(ev =>
+        ev.id === event.id
+          ? { ...ev, globalTimeSlots: updatedGlobalSlots }
+          : ev
+      )
+    );
+
+    // persist
+    try {
+      await updateDoc(doc(db, "events", event.id), {
+        globalTimeSlots: updatedGlobalSlots
+      });
+      // clear inputs
+      setSlotInput({ start: "", location: "", field: "" });
+    } catch (err) {
+      console.error("Errore aggiunta slot globale", err);
+      setSlotError("Errore salvataggio slot.");
+    }
+  };
+
+  const handleDeleteGlobalSlot = async (slotId: string) => {
+    if (!confirm("Sei sicuro di voler eliminare questo slot?")) return;
+    const updatedGlobalSlots = (event.globalTimeSlots || []).filter(s => s.id !== slotId);
+
+    // update UI
+    setEvents(prevEvents =>
+      prevEvents.map(ev =>
+        ev.id === event.id
+          ? { ...ev, globalTimeSlots: updatedGlobalSlots }
+          : ev
+      )
+    );
+
+    // persist
+    try {
+      await updateDoc(doc(db, "events", event.id), {
+        globalTimeSlots: updatedGlobalSlots
+      });
+    } catch (err) {
+      console.error("Errore eliminazione slot globale", err);
+    }
+  };
+
+  // ==============================================
+
   return (
     <div>
       <div className="bg-primary p-6 rounded-xl shadow-lg mb-8">
@@ -322,7 +402,7 @@ const EventView: React.FC<EventViewProps> = ({
                     >
                       Consolazione
                     </button>
-                    {/* AGGIUNTA: tasto Slot Disponibili per aprire direttamente il nuovo tab nel TournamentView */}
+                    {/* aggiunta: apre direttamente tab Slot Disponibili del torneo */}
                     <button
                       onClick={() => onSelectTournament(tournament, 'slot', myGroupId)}
                       className="text-sm bg-tertiary/60 text-white px-3 py-1 rounded hover:bg-tertiary transition"
@@ -367,11 +447,88 @@ const EventView: React.FC<EventViewProps> = ({
         </div>
       </div>
 
-      {/* Sezione slot disponibili globale (lettura per tutti) */}
-      <AvailableSlotsList event={event} />
+      {/* AGGIUNTA: Gestione slot GLOBALI nella home evento (organizzatore) + lista disponibile per tutti */}
+      <div className="mt-8">
+        <h2 className="text-2xl font-bold mb-4 text-white">Slot Orari Globali</h2>
 
-      {/* SLOT ORARI GLOBALI (solo organizzatore) */}
-      {isOrganizer && event.globalTimeSlots && (
+        {/* Sezione per organizzatore: aggiungi nuovo slot */}
+        {isOrganizer && (
+          <div className="mb-6">
+            <h3 className="text-xl font-semibold text-accent mb-3">Gestione slot orari globali</h3>
+            <div className="bg-[#212737] rounded-xl p-5 mb-4 shadow-lg w-full max-w-md flex flex-col gap-3">
+              <h4 className="font-bold text-[#3AF2C5] text-lg mb-1">Aggiungi nuovo slot</h4>
+
+              <input
+                type="datetime-local"
+                value={slotInput.start}
+                onChange={e => setSlotInput(prev => ({ ...prev, start: e.target.value }))}
+                className="input mb-2 bg-[#22283A] text-white font-bold placeholder:text-white placeholder:font-bold"
+                placeholder="Data e ora"
+              />
+              <input
+                type="text"
+                value={slotInput.location}
+                onChange={e => setSlotInput(prev => ({ ...prev, location: e.target.value }))}
+                placeholder="Luogo"
+                className="input mb-2 bg-[#22283A] text-white font-bold placeholder:text-white placeholder:font-bold"
+              />
+              <input
+                type="text"
+                value={slotInput.field}
+                onChange={e => setSlotInput(prev => ({ ...prev, field: e.target.value }))}
+                placeholder="Campo"
+                className="input mb-2 bg-[#22283A] text-white font-bold placeholder:text-white placeholder:font-bold"
+              />
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleAddGlobalSlot}
+                  className="btn-accent self-start px-5 py-1 rounded font-semibold"
+                >
+                  Aggiungi slot
+                </button>
+                {slotError && <span className="text-red-600 font-semibold">{slotError}</span>}
+              </div>
+            </div>
+
+            {/* Lista slot disponibili con possibilità di eliminare (organizzatore) */}
+            <div className="bg-[#212737] rounded-xl shadow-lg p-5 mb-6 w-full max-w-xl">
+              <h4 className="font-bold text-[#3AF2C5] text-lg mb-3">Slot disponibili</h4>
+              {(!event.globalTimeSlots || event.globalTimeSlots.length === 0) ? (
+                <p className="text-gray-400 font-bold">Nessuno slot libero.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {sortedGlobalTimeSlots.map(slot => (
+                    <li key={slot.id} className="flex items-center justify-between border-b border-gray-800 pb-2">
+                      <div>
+                        <span className="font-bold text-white">{new Date(slot.start).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>{" "}
+                        <span className="text-white">-</span>{" "}
+                        <span className="text-accent font-bold">{slot.location}</span>{" "}
+                        <span className="text-white">-</span>{" "}
+                        <span className="text-tertiary font-bold">{slot.field}</span>
+                      </div>
+                      <div>
+                        <button
+                          className="btn-tertiary px-3 py-1 rounded font-semibold"
+                          onClick={() => handleDeleteGlobalSlot(slot.id)}
+                        >
+                          Elimina
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Lista slot disponibile visibile a tutti (lettura) */}
+        <AvailableSlotsList event={event} />
+      </div>
+
+      {/* SLOT ORARI GLOBALI (solo organizzatore) - se vuoi mantenere anche il componente TimeSlots originale (legacy) */}
+      {/* mantenuto per retrocompatibilità: non visibile se già gestito sopra */}
+      {false && isOrganizer && event.globalTimeSlots && (
         <div className="mb-10">
           <h2 className="text-2xl font-bold mb-4 text-white">Slot Orari Globali</h2>
           <TimeSlots
@@ -441,7 +598,7 @@ const EventView: React.FC<EventViewProps> = ({
 
       {/* ----------------- MODAL: AGGIUNGI TORNEO ----------------- */}
       {isAddTournamentOpen && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify_center z-50">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-tertiary">
             <h4 className="text-lg font-bold mb-4 text-accent">Aggiungi Nuovo Torneo</h4>
             <form onSubmit={handleAddTournament} className="space-y-4">
