@@ -6,9 +6,16 @@ function downloadIcsForMatch({eventName, opponentName, date, startTime}: {eventN
   const pad = (num: number) => String(num).padStart(2, '0');
   const dtEnd = (() => {
     const [h, m] = startTime.split(':').map(Number);
+    // date is expected in YYYY-MM-DD and startTime HH:MM
     const dateObj = new Date(`${date}T${startTime}`);
+    // fallback if invalid
+    if (isNaN(dateObj.getTime())) {
+      const parts = date.split('-').map(Number);
+      dateObj.setFullYear(parts[0], parts[1] - 1, parts[2]);
+      dateObj.setHours(h, m, 0, 0);
+    }
     // durata = 1 ora
-    dateObj.setHours(h + 1);
+    dateObj.setHours(dateObj.getHours() + 1);
     return pad(dateObj.getHours()) + pad(dateObj.getMinutes());
   })();
   const icsContent = [
@@ -135,10 +142,26 @@ const MatchCard: React.FC<{
       }
     : null;
 
-  // AGGIUNTA: estrazione date/time raw per export e whatsapp
-  const rawDate = match.scheduledTime ? match.scheduledTime.slice(0,10) : '';
-  const rawTime = match.scheduledTime ? match.scheduledTime.slice(11,16) : '';
-  // /FINE AGGIUNTA
+  // RIMPIAZZO: calcola data/ora locali a partire da scheduledTime (evita problemi di timezone)
+  const localDateObj = match.scheduledTime ? new Date(match.scheduledTime) : null;
+
+  // rawDate per messaggi (formato dd-mm-yyyy)
+  const rawDate = localDateObj
+    ? `${String(localDateObj.getDate()).padStart(2, '0')}-${String(localDateObj.getMonth() + 1).padStart(2, '0')}-${localDateObj.getFullYear()}`
+    : '';
+
+  // rawTime per messaggi (formato HH:MM, locale)
+  const rawTime = localDateObj
+    ? `${String(localDateObj.getHours()).padStart(2, '0')}:${String(localDateObj.getMinutes()).padStart(2, '0')}`
+    : '';
+
+  // ISO locali per ICS / Google Calendar (YYYY-MM-DD and HH:MM)
+  const localDateIso = localDateObj
+    ? `${localDateObj.getFullYear()}-${String(localDateObj.getMonth() + 1).padStart(2, '0')}-${String(localDateObj.getDate()).padStart(2, '0')}`
+    : '';
+  const localTimeIso = localDateObj
+    ? `${String(localDateObj.getHours()).padStart(2, '0')}:${String(localDateObj.getMinutes()).padStart(2, '0')}`
+    : '';
 
   return (
     <div className="bg-secondary p-4 rounded-lg shadow">
@@ -267,9 +290,9 @@ const MatchCard: React.FC<{
             className="bg-highlight text-white text-xs px-3 py-1 rounded hover:bg-accent"
             onClick={() => {
               const eventName = 'Partita torneo';
-              const myName = loggedInPlayerId === player1.id ? player1.name : player2.name;
               const opponentName = loggedInPlayerId === player1.id ? player2.name : player1.name;
-              downloadIcsForMatch({eventName, opponentName, date: rawDate, startTime: rawTime});
+              // scarica .ics usando data/ora locali (ISO)
+              downloadIcsForMatch({ eventName, opponentName, date: localDateIso, startTime: localTimeIso });
             }}
           >
             Scarica .ics
@@ -282,7 +305,7 @@ const MatchCard: React.FC<{
               const opponentName = loggedInPlayerId === player1.id ? player2.name : player1.name;
               const location = scheduledInfo.field || '';
               const description = `Partita del torneo contro ${opponentName} - prenotata tramite Tournament Manager.`;
-              openGoogleCalendarForMatch({ eventName, opponentName, date: rawDate, startTime: rawTime, durationMinutes: 60, location, description });
+              openGoogleCalendarForMatch({ eventName, opponentName, date: localDateIso, startTime: localTimeIso, durationMinutes: 60, location, description });
             }}
           >
             Aggiungi a Google Calendar
